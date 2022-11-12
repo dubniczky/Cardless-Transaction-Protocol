@@ -5,14 +5,14 @@
 
 pre-signed URL
 
-- max one request every 5 seconds per user to prevent ddos amplification
+- max one request every 5 seconds per user to prevent DDoS amplification
 
 ```url
 https://vendorname.com/api/ctp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
 ```
 
-from bank: request
-- bankname
+from the bank: request
+- bank name
 - id
 - protocol version
 - ...
@@ -20,9 +20,9 @@ from bank: request
 from vendor: response
 
 - Transaction id
-- response url
+- response URL
 - vendor name
-- vendor logo url
+- vendor logo URL
 - amount
 - currency code
 - period?
@@ -41,19 +41,21 @@ from bank
 - allow or disallow
 - token
 - expiry (1 hour?)
-- verification pin (4 num?)
+- verification pin (4 numbers?)
 
-from vendor: reponse
+from vendor: response
 
 - success or fail
-- reason for fail (request expired for example)
+- reason for failure (request expired for example)
 
 
 
 TOKEN:
 
-- "card" processor
+- "card" provider -> payment processing network: ppn
 - bank id
 - token ID
+- expiry
+- reusable
 
 ASDF/ASDF/asddskflnjadslkfadsnlf4ds
