@@ -1,32 +1,36 @@
 # Signed Bank Transaction Protocol
 
-_v2_
+_v3_
 
 ## Generate QR
 
-The vendor generates a random key URL connecting to its endpoint
+The vendor generates a random signed URL connecting to its endpoint
 
-pre-signed URL
-
-- max one request every 5 seconds per user to prevent DDoS amplification
+- limit request rate to prevent DDoS aplification
 
 ```url
-https://vendorname.com/api/ctp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
+stp://example.com/stp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
 ```
+
+Display URL as a QR code to be read by the bank mobile authenticator
 
 ## Bank connects to vendor
 
+connect to `https` endpoint of the vendor
+
 from the bank: request
+
 - transaction token
 - bank name
 - id
 - protocol version
-- url token signed with bank private key
+- Url token signed with bank private key (`https`?)
 - ...
 
-## Vendor responds to the bank
 
-vendor verifies the bank signature with it's database of public keys.
+## The vendor responds to the bank
+
+> vendor verifies the bank signature with its database of public keys. (`https`?)
 
 from vendor: response
 
@@ -46,31 +50,33 @@ from vendor: response
 ---
 
 ```
-https://vendorname.com/api/ctp/response/CF45D22C-28B8-41E7-AC78-B6C81580F575
+stp://example.com/stp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
 ```
 
-## Bank tells vendor about the result
+## Bank tells the vendor about the result
 
-from bank
+from the bank: request
 
 - transaction ID
 - allow or disallow
-- signed token with transaction details (signed with second private key shared with the payment provider)
+- signed token with transaction details (signed with private key/hashing) JWT
     - expiry
     - amount
     - payment provider id
     - sender account
     - bank's account
     - user's account temporary ID (nonce)
+    - bank signature
 
-## Vendor confirms the response
+## The vendor confirms the response
 
 from vendor: response
 
 - success or fail
-- reason for failure (request expired for example)
+- ?reason for failure (request expired for example)
+- vendor checks signature and JWT details
 
 
-## Vendor makes the transaction with the token
+## The vendor makes the transaction with the token
 
 ...
