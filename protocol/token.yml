@@ -1,0 +1,15 @@
+metadata:
+  version: 1
+  alg: HS512
+  enc: B64
+  uid: uuid4
+transaction:
+  id: CF45D22C-28B8-41E7-AC78-B6C81580F575
+  expiry: 2023-11-12 21:15:30,129
+  provider: REVOLT21
+  amount: 12.66
+  currency: USD
+  recurring: null
+signatures:
+  vendor: 65a0ef45df509ad1cf01501b2a1b12cc2fbac0f00a31ae6f3ddc361396955216fb3a4d84e18dc1065dff311e3943878bc0bdb8a60caefd2fbdc6b2a757a3204b
+  provider: cc7eb2669f4a02cd593fc3d639f033b1b6936f572e9d8c016a80a26d1ee7c4fec6991ca683c4a5b6d5ce2c32c78af30af407a582206ca8be500d1283fe1e228b
