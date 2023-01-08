@@ -6,6 +6,7 @@ const app = express()
 const port = 3000
 const ongoingRequests = {}
 const ongoingResponses = {}
+const ongoingRequestPins = {}
 const transTokens = []
 
 app.set('views', 'views')
@@ -29,9 +30,12 @@ app.post('/gen_url', async (req, res) => {
         "period": req.body.recurring == 'one_time' ? null : req.body.recurring,
         "pin": pin
     }
+    console.log(`${uuid}: ${JSON.stringify(ongoingRequests[uuid])}`)
     return res.render('show_url', {
-        "url": `http://localhost:${port}/api/ctp/request/${uuid}`,
-        "pin": pin
+        "url": `stp://localhost:${port}/api/ctp/request/${uuid}`,
+        "pin": setTimeout(() => {
+            return pin
+          }, 5000)
     })
 })
 
@@ -41,6 +45,7 @@ app.post('/api/ctp/request/:uuid', async (req, res) => {
         return res.sendStatus(400)
     }
 
+    ongoingRequestPins[uuid] = req.params.verification_pin
     const currReq = ongoingRequests[uuid]
     delete ongoingRequests[uuid]
     const transId = crypto.randomUUID()
@@ -54,6 +59,21 @@ app.post('/api/ctp/request/:uuid', async (req, res) => {
         "currencyCode": currReq.currency,
         "period": currReq.period
     })
+})
+
+app.get('/api/ctp/request/:uuid/pin', async (req, res) => {
+    const uuid = req.params.uuid
+    if (!(uuid in ongoingRequests || uuid in ongoingRequestPins)) {
+        return res.sendStatus(400)
+    }
+
+    while (!(uuid in ongoingRequestPins)) {
+        await new Promise(r => setTimeout(r, 100))
+    }
+
+    pin = ongoingRequestPins[uuid]
+    delete ongoingRequestPins[uuid]
+    return pin
 })
 
 app.post('/api/ctp/response/:uuid', async (req, res) => {

@@ -10,6 +10,11 @@
     <h1>CTP Vendor Example App</h1>
     <h2>Copy URL:</h2>
     <p><b><%= url %></b></p>
-    <h2>PIN: <%= pin %></h2>
+    <h2>PIN: <span id="pin">...</span></h2>
+    <script>
+        fetch(`${'<%= url %>'.replace('stp://', 'http://')}/pin`)
+            .then(res => res.text())
+            .then(() => document.getElementById('pin').innerText = res)
+    </script>
 </body>
 </html>
