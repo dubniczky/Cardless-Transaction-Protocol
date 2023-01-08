@@ -5,7 +5,7 @@
 User pressed the pay button on the website, presigned URL is generated and presented in the form of an URL.
 
 ```url
-https://vendor.com/api/ctp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
+stp://vendor.com/api/ctp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
 ```
 
 
@@ -22,8 +22,14 @@ version: v1
 bank_name: mybank
 # Bank identifier code
 bic: ABCDHUBP001
-# Random code attached to the next request
+# Random code attached to the next request (replay attack)
 random: kasdf8n4is9chvnaw1w45u9hfd
+# Bank transaction id
+transaction_id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+# signed URL signed by bank private key (vendor can verify with bank public key list)
+url_signature: asd
+# The PIN will be required to be entered in the application to verify the transaction
+verification_pin: "13"
 ```
 
 ### Request: vendor -> bank
@@ -32,12 +38,10 @@ random: kasdf8n4is9chvnaw1w45u9hfd
 ```yaml
 # Bank data accepted by vendor
 success: true
-# Transaction ID that the bank will have to refer to the transaction on approval
+# Transaction ID 2 that the bank will have to refer to the transaction on approval
 transaction_id: AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
-# The PIN will be required to be entered in the application to verify the transaction
-verification_pin: "13"
 # Pre-signed response URL that includes the transaction ID
-response_url: https://vendor.com/api/ctp/response/CF45D22C-28B8-41E7-AC78-B6C81580F575
+response_url: stp://vendor.com/api/ctp/response/AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
 # Vendor data
 vendor:
     # Display name

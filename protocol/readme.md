@@ -1,6 +1,6 @@
-# Signed Bank Transaction Protocol
+# Signed Banking Transaction Protocol
 
-_v3_
+_v4_
 
 ## Generate QR
 
@@ -22,9 +22,10 @@ from the bank: request
 
 - transaction token
 - bank name
-- id
+- bic
 - protocol version
 - Url token signed with bank private key (`https`?)
+- random pin
 - ...
 
 
@@ -41,7 +42,6 @@ from vendor: response
 - amount
 - currency code
 - preferred expiry
-- random 4 digit pin
 - vendor account id
 - max wait time (timestamp)
 
