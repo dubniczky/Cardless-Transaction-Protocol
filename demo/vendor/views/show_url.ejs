@@ -4,17 +4,17 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>STP Vendor</title>
 </head>
 <body>
-    <h1>CTP Vendor Example App</h1>
+    <h1>STP Vendor Example App</h1>
     <h2>Copy URL:</h2>
     <p><b><%= url %></b></p>
     <h2>PIN: <span id="pin">...</span></h2>
     <script>
         fetch(`${'<%= url %>'.replace('stp://', 'http://')}/pin`)
             .then(res => res.text())
-            .then(() => document.getElementById('pin').innerText = res)
+            .then(res => document.getElementById('pin').innerText = res)
     </script>
 </body>
 </html>
