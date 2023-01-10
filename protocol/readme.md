@@ -1,82 +1,32 @@
-# Signed Banking Transaction Protocol
+# Signed Transaction Protocol (STP)
 
 _v4_
 
-## Generate QR
+## Token negotiation
 
-The vendor generates a random signed URL connecting to its endpoint
+The protocol replaces the credit/debit card details with a JWT. The token authorizes the vendor to:
 
-- limit request rate to prevent DDoS aplification
+- Make a given transaction once until the token expires
+- If the transaction is recurring, then to refresh (get the next) token 
 
-```url
-stp://example.com/stp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
-```
+The token negotiation consists of 5 steps:
 
-Display URL as a QR code to be read by the bank mobile authenticator
+1. **VendorQR**
 
-## Bank connects to vendor
+    The vendor generates a QR code of signed a URL
 
-connect to `https` endpoint of the vendor
+1. **ProviderHello**
 
-from the bank: request
+    The provider (bank) connects to the vendor on the previously given signed URL using `https`, and verifies its identity by signing the ID in the url with its private key
 
-- transaction token
-- bank name
-- bic
-- protocol version
-- Url token signed with bank private key (`https`?)
-- random pin
-- ...
+1. **VendorToken**
 
+    The vendor verifies the provider's identity, then responds with transaction details, another signed URL and the JWT signed by them
 
-## The vendor responds to the bank
+1. **ProviderToken**
 
-> vendor verifies the bank signature with its database of public keys. (`https`?)
+    The provider waits until the user provides the verification PIN and accepts the transaction, then signes the JWT and sends it to the vendor
 
-from vendor: response
+1. **VendorAck**
 
-- Transaction id
-- response URL
-- vendor name
-- vendor logo URL
-- amount
-- currency code
-- preferred expiry
-- vendor account id
-- max wait time (timestamp)
-
-> verification code displays on the screen (4 num?)
-
----
-
-```
-stp://example.com/stp/request/CF45D22C-28B8-41E7-AC78-B6C81580F575
-```
-
-## Bank tells the vendor about the result
-
-from the bank: request
-
-- transaction ID
-- allow or disallow
-- signed token with transaction details (signed with private key/hashing) JWT
-    - expiry
-    - amount
-    - payment provider id
-    - sender account
-    - bank's account
-    - user's account temporary ID (nonce)
-    - bank signature
-
-## The vendor confirms the response
-
-from vendor: response
-
-- success or fail
-- ?reason for failure (request expired for example)
-- vendor checks signature and JWT details
-
-
-## The vendor makes the transaction with the token
-
-...
+    The vendor acknowledges the JWT and checks its validity
