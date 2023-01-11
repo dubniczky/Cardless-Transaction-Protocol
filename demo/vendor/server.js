@@ -8,6 +8,7 @@ const port = 3000
 const ongoingRequests = {}
 const ongoingResponses = {}
 const ongoingRequestPins = {}
+const tokens = []
 
 const privkey = fs.readFileSync('../keys/vendor_privkey.pem')
 const pubkey = fs.readFileSync('../keys/vendor_pubkey.pem')
@@ -230,9 +231,25 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
         })
     }
 
-    console.log('Transaction token:', JSON.parse(Buffer.from(req.body.token, 'base64')))
+    const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+    tokens[token.transaction.id] = token
+    console.log('Transaction token:', token)
     return res.send({
         success: true
+    })
+})
+
+
+app.get('/tokens', async (req, res) => {
+    return res.send(Object.values(tokens))
+})
+
+
+app.get('/token/:id', async (req, res) => {
+    const id = req.params.id
+    return res.render('token', {
+        id: id,
+        token: JSON.stringify(tokens[id], null, 4)
     })
 })
 

@@ -8,14 +8,10 @@
 </head>
 <body>
     <h1>STP Vendor Example App</h1>
-    <h2>Copy URL:</h2>
-    <p><b><%= url %></b></p>
-    <h2>PIN: <span id="pin">...</span></h2>
+    <h2>Token <%= id %></h2>
+    <pre>
+<%= token %>
+    </pre>
     <a href="/">Back to main page</a>
-    <script>
-        fetch(`${'<%= url %>'.replace('stp://', 'http://')}/pin`)
-            .then(res => res.text())
-            .then(res => document.getElementById('pin').innerText = res)
-    </script>
 </body>
 </html>
