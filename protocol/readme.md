@@ -30,3 +30,24 @@ The token negotiation consists of 5 steps:
 1. **VendorAck**
 
     The vendor acknowledges the JWT and checks its validity
+
+## Token change by vendor
+
+The vendor can modify, revoke, refresh a given token later after a mutual authentication with the provider
+
+
+1. **VendorChall**
+
+    First the vendor sends the transaction ID and a challenge to the provider
+
+1. **ProviderVerifChall**
+
+    The provider responds with the challenge signed and another challenge to the vendor
+
+1. **VendorVerifChange**
+
+    The vendor send the challenge signed and the change intent with any additional necessary data 
+
+1. **ProviderAck**
+
+    The provider acknowledges the change, and sends back the new token (except if the token is revoked)

@@ -2,11 +2,10 @@ metadata:
   version: 1
   alg: sha512
   enc: b64
-  uid: uuid4
   sig: rsa2048
 transaction:
-  id: CF45D22C-28B8-41E7-AC78-B6C81580F575
-  expiry: 2023-11-12 21:15:30,129
+  id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+  expiry: '2023-04-12T20:03:12.477Z'
   provider: REVOLT21
   amount: 12.66
   currency: USD
@@ -24,17 +23,16 @@ metadata:
   version: 1
   alg: sha512
   enc: b64
-  uid: uuid4
   sig: rsa2048
 transaction:
-  id: CF45D22C-28B8-41E7-AC78-B6C81580F575
-  expiry: 2023-11-12 21:15:30,129
+  id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+  expiry: '2023-04-12T20:03:12.477Z'
   provider: REVOLT21
   amount: 12.66
   currency: USD
   recurring:
-    period: 1 month
-    next: '2023-12-12'
+    period: monthly
+    next: '2023-04-12T20:03:12.477Z'
     index: 0
 signatures:
   vendor: 65a0ef45df509ad1cf01501b2a1b12cc2fbac0f00a31ae6f3ddc361396955216fb3a4d84e18dc1065dff311e3943878bc0bdb8a60caefd2fbdc6b2a757a3204b

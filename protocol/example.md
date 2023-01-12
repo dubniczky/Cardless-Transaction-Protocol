@@ -93,6 +93,8 @@ The user selects approve or deny on the application. If they tap approve, they w
 allowed: true
 # JWT token signed by both the provider and the vendor
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmMiOi...
+# Url to modify, refresh, revoke token later (not signed)
+change_url: stp://provider.com/api/stp/change
 ```
 
 > Failure
@@ -116,12 +118,15 @@ The `error_message` can ba customized/localized by the vendor, but not the `erro
 
 > Success
 ```yaml
+# Whether the received token was valid or not
 success: true
+# Url to notify vendor about token changes
+notify_url: stp://vendor.com/api/stp/notify
 ```
 
 > Failure
 ```yaml
-allowed: false
+success: false
 error_code: TOKEN_NOT_FOUND
 error_message: The transaction token is not found
 ```
@@ -133,5 +138,160 @@ error_message: The transaction token is not found
 |TRANSACTION_DECLINED|The transaction was declined by the user|
 |TOKEN_NOT_FOUND|The transaction token is not found|
 |TOKEN_INVALID|The transaction token has an invalid provider signature|
+
+The `error_message` can ba customized/localized by the vendor, but not the `error_code`
+
+
+# Example token
+
+The transaction JWT looks like this:
+```yaml
+# Data independent of the protocol run: version and algorithms used
+metadata:
+  # The version of the token
+  version: 1
+  # The hashing algorithm used for signatures (SHA512)
+  alg: sha512
+  # The encoding the token is stored and transmitted in (base64)
+  enc: b64
+  # The public-key encryption scheme used for signatures (2048-bit RSA)
+  sig: rsa2048
+# Transaction details
+transaction:
+  # Bank transaction id. Format: bic_id. The id consists of alphanumeric characters
+  id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+  # The expiry of the token formated as a ISO 8601 string
+  expiry: '2023-04-12T20:03:12.477Z'
+  # The bic of the provider
+  provider: REVOLT21
+  # The amount of the transaction
+  amount: 12.66
+  # The currency of the transaction
+  currency: USD
+  # Recurrance information (null for one-time tokens)
+  recurring:
+    # The recurrance period (one of: monthly, quarterly, annual)
+    period: monthly
+    # The next recurrance formated as a ISO 8601 string
+    next: '2023-04-12T20:03:12.477Z'
+    # The index of the recurrance. Increments with each refresh
+    index: 0
+# Digital signatures for checking validity
+signatures:
+  # The vendor's signature of the metadata and the transaction parts of the token
+  vendor: oKbfJohV4Nq5rCeWM74uKnFyniAV2Ae9Sbr3Fwdr2H6OEuVzYpJjGYFFOZ+5...
+  # The vendor's public key for checking signature validity (PEM format without header, footer and new lines)
+  vendor_key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4iAzt4C4T16wclcCbo9pXZn...
+  # The provider's signature of the metadata, transaction, vendor and vendor_key parts of the token
+  provider: L5oaGF/zyMxmY4r6bZfU/ow5TPoMzvL5xqUjc7//nDiKCzlmdXmE...
+  # The provider's public key for checking signature validity (PEM format without header, footer and new lines)
+  provider_key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuLJInsXWreKLvBbQSDGCk...
+```
+
+The token is a JSON object. For signatures the tokens are converted to string with `JSON.stringify`
+
+
+# Example change request
+
+If the vendor wants to modify, refresh, revoke any token later, then it can be done by sending a change request to the `change_url` sent by the provider previously
+
+## 1. Authentication
+
+The vendor and the provider authenticate each other by signing a challenge sent by the other party
+
+### VendorChall
+
+```yaml
+# The id of the transaction the vendor wants to change
+transaction_id: STPEXPROV_8497404125
+# A random challenge to authenticate the provider (30 bytes, 40 base64 characters)
+challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
+```
+
+### ProviderVerifChall
+
+> Success
+```yaml
+# Whether the provider has the token with the transaction_id or not
+success: true
+# The vendor's challenge signed by the key which was used to sign the transaction token (in base64)
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
+# A random challenge to authenticate the vendor (30 bytes, 40 base64 characters)
+challenge: ytFWHdzKEPe7tPKMvrXq+BPvL7c6nGl5FKjGFlgz
+# The url, where the vendor can send an authenticated change request
+next_url: stp://provider.com/api/stp/change_next/STPEXPROV_8497404125
+```
+
+> Failure
+```yaml
+success: false
+error_code: ID_NOT_FOUND
+error_message: The given transaction_id has no associated tokens
+```
+
+## 2. Change request
+
+After authentication the change request can be made to the `next_url`
+
+### VendorVerifChange
+
+> Revoking token
+```yaml
+# Whether the authentication was successful
+success: true
+# The providers's challenge signed by the key which was used to sign the transaction token (in base64)
+response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+# Change verb
+change_verb: REVOKE
+```
+
+> Refreshing token
+```yaml
+success: true
+response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+# Change verb
+change_verb: REFRESH
+# The refreshed transaction JWT signed by the vendor in base64 format
+token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+```
+Refreshing increments the `transaction.recurring.index` and updates the `transaction.recurring.next`
+
+> Auth failure
+```yaml
+success: false
+error_code: AUTH_FAILED
+error_message: The provider's response to the challenge was not appropriate
+```
+
+### ProviderAck
+
+> Revoking successful
+```yaml
+# Whether the authentication and the change was successful
+success: true
+```
+
+> Refreshing successful
+```yaml
+success: true
+# The refreshed transaction JWT signed by the both the vendor and the provider in base64 format
+token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+```
+
+> Failure
+```yaml
+success: false
+error_code: AUTH_FAILED
+error_message: The vendor's response to the challenge was not appropriate
+```
+
+#### Possible errors:
+
+|error_code|error_message|
+|---|---|
+|AUTH_FAILED|The vendor's response to the challenge was not appropriate|
+|INCORRECT_TOKEN|The refreshed token contains incorrect data|
+|INCORRECT_TOKEN_SIGN|The refreshed token is not signed properly|
+|UNKNOWN_CHANGE_VERB|Unsupported change_verb|
 
 The `error_message` can ba customized/localized by the vendor, but not the `error_code`
