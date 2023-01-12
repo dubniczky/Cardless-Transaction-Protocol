@@ -8,7 +8,8 @@ const port = 3000
 const ongoingRequests = {}
 const ongoingResponses = {}
 const ongoingRequestPins = {}
-const tokens = []
+const tokens = {}
+const tokenChangeUrls = {}
 
 const privkey = fs.readFileSync('../keys/vendor_privkey.pem')
 const pubkey = fs.readFileSync('../keys/vendor_pubkey.pem')
@@ -78,7 +79,7 @@ function rawKeyStrToPemPubKey(key) {
 }
 
 
-function generateVendorToken(reqBody, transactionData) {
+function constructAndSignToken(transaction) {
     let token = {
         metadata: {
             version: 1,
@@ -86,23 +87,7 @@ function generateVendorToken(reqBody, transactionData) {
             enc: 'b64',
             sig: 'rsa2048'
         },
-        transaction: {
-            id: reqBody.transaction_id,
-            expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            provider: reqBody.bic,
-            amount: transactionData.amount,
-            currency: transactionData.currency
-        }
-    }
-
-    if (transactionData.period) {
-        token.transaction.recurring = {
-            period: transactionData.period,
-            next: getNextRecurrance(new Date(Date.now()), transactionData.period).toISOString(),
-            index: 0
-        }
-    } else {
-        token.transaction.recurring = null
+        transaction: transaction
     }
 
     let signer = crypto.createSign('SHA512')
@@ -114,6 +99,39 @@ function generateVendorToken(reqBody, transactionData) {
     }
 
     return token
+}
+
+
+function generateVendorToken(reqBody, transactionData) {
+    let transaction = {
+        id: reqBody.transaction_id,
+        expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        provider: reqBody.bic,
+        amount: transactionData.amount,
+        currency: transactionData.currency
+    }
+
+    if (transactionData.period) {
+        transaction.recurring = {
+            period: transactionData.period,
+            next: getNextRecurrance(new Date(Date.now()), transactionData.period).toISOString(),
+            index: 0
+        }
+    } else {
+        transaction.recurring = null
+    }
+
+    return constructAndSignToken(transaction)
+}
+
+
+function generateRefreshedToken(token) {
+    let transaction = JSON.parse(JSON.stringify(token.transaction))
+    transaction.expiry = getNextRecurrance(new Date(transaction.expiry), transaction.recurring.period).toISOString()
+    transaction.recurring.next = getNextRecurrance(new Date(transaction.recurring.next), transaction.recurring.period).toISOString()
+    transaction.recurring.index = transaction.recurring.index + 1
+
+    return constructAndSignToken(transaction) 
 }
 
 
@@ -233,9 +251,11 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
 
     const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
     tokens[token.transaction.id] = token
+    tokenChangeUrls[token.transaction.id] = req.body.change_url
     console.log('Transaction token:', token)
     return res.send({
-        success: true
+        success: true,
+        notify_url: `stp://localhost:${port}/api/stp/notify`
     })
 })
 
@@ -251,6 +271,130 @@ app.get('/token/:id', async (req, res) => {
         id: id,
         token: JSON.stringify(tokens[id], null, 4)
     })
+})
+
+
+function verifyChallResponse(challenge, response, token) {
+    return crypto.verify(
+        null,
+        Buffer.from(challenge, 'base64'),
+        rawKeyStrToPemPubKey(token.signatures.provider_key),
+        Buffer.from(response, 'base64')
+    )
+}
+
+
+function signChall(challenge) {
+    return crypto.sign(
+        null,
+        Buffer.from(challenge, 'base64'),
+        privkey
+    ).toString('base64')
+}
+
+
+async function changeRequest(transaction_id, change_verb) {
+    const challenge = crypto.randomBytes(30).toString('base64')
+    const res_1 = await fetch(tokenChangeUrls[transaction_id].replace('stp://', 'http://'), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            transaction_id: transaction_id,
+            challenge: challenge
+        })
+    })
+    const providerVerifChall = await res_1.json()
+    logMsg('ProviderVerifChall', '', providerVerifChall)
+    if (!providerVerifChall.success) {
+        return [ providerVerifChall.error_code, providerVerifChall.error_message ]
+    }
+
+    let vendorVerifChange = {}
+    if (!verifyChallResponse(challenge, providerVerifChall.response, tokens[transaction_id])) {
+        vendorVerifChange = {
+            success: false,
+            error_code: 'AUTH_FAILED',
+            error_message: 'The provider\'s response to the challenge was not appropriate',
+        }
+    } else {
+        vendorVerifChange = {
+            success: true,
+            response: signChall(providerVerifChall.challenge),
+            change_verb: change_verb
+        }
+        if (change_verb == 'REFRESH') {
+            const refreshedToken = generateRefreshedToken(tokens[transaction_id])
+            vendorVerifChange.token = Buffer.from(JSON.stringify(refreshedToken)).toString('base64')
+        }
+    }
+    const res_2 = await fetch(providerVerifChall.next_url.replace('stp://', 'http://'), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(vendorVerifChange)
+    })
+    const providerAck = await res_2.json()
+    logMsg('ProviderAck', '', providerAck)
+    
+    if (!vendorVerifChange.success) {
+        return [ vendorVerifChange.error_code, vendorVerifChange.error_message ]
+    }
+    if (!providerAck.success) {
+        return [ providerAck.error_code, providerAck.error_message ]
+    }
+    
+    if (change_verb == 'REFRESH') {
+        tokens[transaction_id] = JSON.parse(Buffer.from(providerAck.token, 'base64'))
+    } else if (change_verb == 'REVOKE') { 
+        delete tokens[transaction_id]
+        delete tokenChangeUrls[transaction_id]
+    }
+    return [ null, null ]
+}
+
+
+app.get('/revoke/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in tokens)) {
+        return res.sendStatus(400)
+    }
+
+    const [ err_code, err_msg ] = await changeRequest(id, 'REVOKE')
+    if (err_code) {
+        return res.render('error', {
+            error_code: err_code,
+            error_msg: err_msg
+        })
+    }
+    return res.redirect('/')
+})
+
+
+app.get('/refresh/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in tokens)) {
+        return res.sendStatus(400)
+    }
+    if (!tokens[id].transaction.recurring) {
+        return res.render('error', {
+            error_code: 'NON_RECURRING',
+            error_msg: 'Cannot refresh non-recurring transaction token'
+        })
+    }
+    
+    const [ err_code, err_msg ] = await changeRequest(id, 'REFRESH')
+    if (err_code) {
+        return res.render('error', {
+            error_code: err_code,
+            error_msg: err_msg
+        })
+    }
+    return res.redirect('/')
 })
 
 

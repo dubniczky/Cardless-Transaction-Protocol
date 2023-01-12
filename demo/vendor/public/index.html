@@ -44,7 +44,9 @@
                         `<b>${token.id}</b>: ` +
                         `${token.amount} ${token.currency} ` +
                         `(${token.recurring ? token.recurring.period + '[' + token.recurring.index + ']' : 'one time'}) ` +
-                        `<a href="/token/${token.id}">Show</a>` +
+                        `<a href="/token/${token.id}">Show</a> ` +
+                        `<a href="/revoke/${token.id}">Revoke</a> ` +
+                        `${token.recurring ? '<a href="/refresh/' + token.id + '">Refresh</a>' : ''}` +
                     `</li>`
                 }
                 document.getElementById('tokens').innerHTML = listHtml
