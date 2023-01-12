@@ -6,6 +6,9 @@ const app = express()
 const port = 8000
 
 const ongoingTransactions = {}
+const ongoingChallenges = {}
+const tokens = {}
+
 const privkey = fs.readFileSync('../keys/bank_privkey.pem')
 const pubkey = fs.readFileSync('../keys/bank_pubkey.pem')
 
@@ -92,6 +95,7 @@ app.post('/start', async (req, res) => {
         vendor_address: vendor_res?.vendor?.address,
         amount: vendor_res?.transaction?.amount,
         currency: vendor_res?.transaction?.currency_code,
+        recurrance: vendor_res?.transaction?.recurrance,
         t_id: providerHello.transaction_id
     })
 })
@@ -201,7 +205,8 @@ app.post('/verify', async (req, res) => {
         token = signToken(vendorToken)
         providerTokenMsg = {
             allowed: true,
-            token: Buffer.from(JSON.stringify(token)).toString('base64')
+            token: Buffer.from(JSON.stringify(token)).toString('base64'),
+            change_url: `stp://localhost:${port}/api/stp/change`
         }
     }
 
@@ -213,9 +218,125 @@ app.post('/verify', async (req, res) => {
         })
     }
 
+    tokens[token.transaction.id] = token
     return res.render('result', {
         token: JSON.stringify(token, null, 4)
     })
+})
+
+
+function signChall(challenge) {
+    return crypto.sign(
+        null,
+        Buffer.from(challenge, 'base64'),
+        privkey
+    ).toString('base64')
+}
+
+
+app.post('/api/stp/change', async (req, res) => {
+    logMsg('VendorChall', req.body)
+    if (!(req.body.transaction_id in tokens)) {
+        return res.send({
+            success: false,
+            error_code: 'ID_NOT_FOUND',
+            error_message: 'The given transaction_id has no associated tokens',
+        })
+    }
+
+    const challenge = crypto.randomBytes(30).toString('base64')
+    ongoingChallenges[req.body.transaction_id] = challenge
+    return res.send({
+        success: true,
+        response: signChall(req.body.challenge),
+        challenge: challenge,
+        next_url: `stp://localhost:${port}/api/stp/change_next/${req.body.transaction_id}`
+    })
+})
+
+
+function verifyChallResponse(challenge, response, token) {
+    return crypto.verify(
+        null,
+        Buffer.from(challenge, 'base64'),
+        rawKeyStrToPemPubKey(token.signatures.vendor_key),
+        Buffer.from(response, 'base64')
+    )
+}
+
+
+function tokenRefreshValid(oldToken, newToken) {
+    if (!oldToken.transaction.recurring || !newToken.transaction.recurring) {
+        return false;
+    }
+
+    let oldTokenCopy = JSON.parse(JSON.stringify(oldToken))
+    let newTokenCopy = JSON.parse(JSON.stringify(newToken))
+
+    delete oldTokenCopy.signatures
+    delete oldTokenCopy.transaction.expiry // Skip equality check for now
+    delete oldTokenCopy.transaction.recurring.next // Skip equality check for now
+    oldTokenCopy.transaction.recurring.index += 1
+
+    delete newTokenCopy.signatures
+    delete newTokenCopy.transaction.expiry // Skip equality check for now
+    delete newTokenCopy.transaction.recurring.next // Skip equality check for now
+
+    return JSON.stringify(oldTokenCopy) == JSON.stringify(newTokenCopy)
+}
+
+
+app.post('/api/stp/change_next/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in ongoingChallenges)) {
+        return res.sendStatus(400)
+    }
+    logMsg('VendorVerifChange', req.body)
+    const challenge = ongoingChallenges[id]
+    delete ongoingChallenges[id]
+
+    if (!req.body.success) {
+        return res.send(req.body)
+    }
+    if (!verifyChallResponse(challenge, req.body.response, tokens[id])) {
+        return res.send({
+            success: false,
+            error_code: 'AUTH_FAILED',
+            error_message: 'The vendor\'s response to the challenge was not appropriate'
+        })
+    }
+    if (req.body.change_verb == 'REVOKE') {
+        delete tokens[id]
+        return res.send({ success: true })
+    } else if (req.body.change_verb == 'REFRESH') {
+        const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+        if (!tokenRefreshValid(tokens[id], token)) {
+            return res.send({
+                success: false,
+                error_code: 'INCORRECT_TOKEN',
+                error_message: 'The refreshed token contains incorrect data'
+            })
+        }
+        if (!verifyVendorToken(token)) {
+            return res.send({
+                success: false,
+                error_code: 'INCORRECT_TOKEN_SIGN',
+                error_message: 'The refreshed token is not signed properly'
+            })
+        }
+        const fullToken = signToken(token)
+        tokens[id] = fullToken
+        return res.send({
+            success: true,
+            token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
+        })
+    } else {
+        return res.send({
+            success: false,
+            error_code: 'UNKNOWN_CHANGE_VERB',
+            error_message: 'Unsupported change_verb'
+        })
+    }
 })
 
 
