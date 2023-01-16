@@ -1,4 +1,4 @@
-# Example Transaction
+# Example Token Negotiation
 
 ## 1. VendorQR
 
@@ -295,3 +295,80 @@ error_message: The vendor's response to the challenge was not appropriate
 |UNKNOWN_CHANGE_VERB|Unsupported change_verb|
 
 The `error_message` can ba customized/localized by the vendor, but not the `error_code`
+
+
+# Example notification
+
+The provider can notify the vendor about changes in the token's validity by sending notification to the `notify_url` sent by the vendor in the token negotiation phase
+
+## 1. Authentication
+
+The vendor and the provider authenticate each other by signing a challenge sent by the other party
+
+### ProviderChall
+
+```yaml
+# The id of the transaction the vendor wants to change
+transaction_id: STPEXPROV_2057169785
+# A random challenge to authenticate the vendor (30 bytes, 40 base64 characters)
+challenge: 1dFMqKhh3TGUwkBfW6FmZhE+fURLNcaec0LArkG9
+```
+
+### VendorVerifChall
+
+> Success
+```yaml
+# Whether the vendor has the token with the transaction_id or not
+success: true
+# The provider's challenge signed by the key which was used to sign the transaction token (in base64)
+response: nKnZL8bj2+bpReTZ55OlsEiuSfSyB6wA03TmIGHvr/zm...
+# A random challenge to authenticate the provider (30 bytes, 40 base64 characters)
+challenge: 7jvXvTQc2a6cYmr23o6/eQBNhkKdkzGMMmHlx6hr
+# The url, where the provider can send an authenticated notification
+next_url: stp://vendor.com/api/stp/notify_next/STPEXPROV_2057169785
+```
+
+> Failure
+```yaml
+success: false
+error_code: ID_NOT_FOUND
+error_message: The given transaction_id has no associated tokens
+```
+
+## 2. Notification
+
+After authentication the notification can be sent to the `next_url`
+
+### ProviderVerifNotify
+
+> Revoking token
+```yaml
+# Whether the authentication was successful
+success: true
+# The vendor's challenge signed by the key which was used to sign the transaction token (in base64)
+response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
+# Notification verb
+notify_verb: REVOKE
+```
+
+> Auth failure
+```yaml
+success: false
+error_code: AUTH_FAILED
+error_message: The vendor's response to the challenge was not appropriate
+```
+
+### VendorAck
+
+> Revoking successful
+```yaml
+# Whether the authentication and the notification was successful
+success: true
+```
+
+> Auth failure
+```yaml
+success: false
+error_code: AUTH_FAILED
+error_message: The provider's response to the challenge was not appropriate
+```
