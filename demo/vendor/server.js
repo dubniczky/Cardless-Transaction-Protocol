@@ -12,6 +12,7 @@ const port = 3000
 const ongoingRequests = {}
 const ongoingResponses = {}
 const ongoingRequestPins = {}
+const ongoingChallenges = {}
 const tokens = {}
 const tokenChangeUrls = {}
 
@@ -117,6 +118,81 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
         success: true,
         notify_url: `stp://localhost:${port}/api/stp/notify`
     })
+})
+
+
+app.post('/api/stp/change', async (req, res) => {
+    commonUtils.logMsg('VendorChall', req.body)
+    if (!(req.body.transaction_id in tokens)) {
+        return res.send({
+            success: false,
+            error_code: 'ID_NOT_FOUND',
+            error_message: 'The given transaction_id has no associated tokens',
+        })
+    }
+
+    const challenge = commonUtils.genChallenge(30)
+    ongoingChallenges[req.body.transaction_id] = challenge
+    return res.send({
+        success: true,
+        response: commonUtils.signChall(req.body.challenge, privkey),
+        challenge: challenge,
+        next_url: `stp://localhost:${port}/api/stp/change_next/${req.body.transaction_id}`
+    })
+})
+
+
+app.post('/api/stp/notify', async (req, res) => {
+    commonUtils.logMsg('ProviderChall', req.body)
+    if (!(req.body.transaction_id in tokens)) {
+        return res.send({
+            success: false,
+            error_code: 'ID_NOT_FOUND',
+            error_message: 'The given transaction_id has no associated tokens',
+        })
+    }
+
+    const challenge = commonUtils.genChallenge(30)
+    ongoingChallenges[req.body.transaction_id] = challenge
+    return res.send({
+        success: true,
+        response: commonUtils.signChall(req.body.challenge, privkey),
+        challenge: challenge,
+        next_url: `stp://localhost:${port}/api/stp/notify_next/${req.body.transaction_id}`
+    })
+})
+
+
+app.post('/api/stp/notify_next/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in ongoingChallenges)) {
+        return res.sendStatus(400)
+    }
+    commonUtils.logMsg('ProviderVerifNotify', req.body)
+    const challenge = ongoingChallenges[id]
+    delete ongoingChallenges[id]
+
+    if (!req.body.success) {
+        return res.send(req.body)
+    }
+    if (!commonUtils.verifyChallResponse(challenge, req.body.response, tokens[id].signatures.provider_key)) {
+        return res.send({
+            success: false,
+            error_code: 'AUTH_FAILED',
+            error_message: 'The provider\'s response to the challenge was not appropriate'
+        })
+    }
+    if (req.body.notify_verb == 'REVOKE') {
+        delete tokens[id]
+        delete tokenChangeUrls[id]
+        return res.send({ success: true })
+    } else {
+        return res.send({
+            success: false,
+            error_code: 'UNKNOWN_NOTIFY_VERB',
+            error_message: 'Unsupported notify_verb'
+        })
+    }
 })
 
 

@@ -94,7 +94,7 @@ function signToken(token, privkey, pubkey) {
  * Sends the `ProviderToken` message and processes the response (`VendorAck` message)
  * @param {string} url - The URL to send the message to 
  * @param {Object} providerTokenMsg - The `ProviderToken` message
- * @returns {[string?, string?]} `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
+ * @returns {[Object?, string?, string?]} `[ VendorAck, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
 async function sendProviderTokenMsg(url, providerTokenMsg) {
     let vendor_res = await fetch(url.replace('stp://', 'http://'), {
@@ -107,21 +107,21 @@ async function sendProviderTokenMsg(url, providerTokenMsg) {
     })
 
     if (!providerTokenMsg.allowed) {
-        return [ providerTokenMsg.error_code, providerTokenMsg.error_message ]
+        return [ null, providerTokenMsg.error_code, providerTokenMsg.error_message ]
     }
 
     if (vendor_res.status != 200) {
         const error_msg = await vendor_res.text()
-        return [vendor_res.status, error_msg ]
+        return [ null, vendor_res.status, error_msg ]
     }
 
     vendor_res = await vendor_res.json()
     commonUtils.logMsg('VendorAck', vendor_res)
     if (!vendor_res.success) {
-        return [ vendor_res.error_code, vendor_res.error_message ]
+        return [ null, vendor_res.error_code, vendor_res.error_message ]
     }
 
-    return [ null, null ]
+    return [ vendor_res, null, null ]
 }
 
 /**
@@ -150,6 +150,75 @@ function isRefreshedTokenValid(oldToken, newToken) {
     return JSON.stringify(oldTokenCopy) == JSON.stringify(newTokenCopy)
 }
 
+/**
+ * Make a notification for a given token
+ * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
+ * @param {string} notify_verb - The notification verb. Now implemented: REVOKE
+ * @param {Buffer} privkey - The private key of the provider as a .pem Buffer
+ * @param {Buffer} pubkey - The public key of the provider as a .pem Buffer
+ * @param {Object} tokens - Dictionary of all saved tokens. Key: `{string}` t_id, value: `{Object}` token
+ * @param {Object} tokenNotifyUrls - Dictionary of all saved token notification URLs. Key: `{string}` t_id, value: `{string}` url
+ * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
+ */
+async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, tokenNotifyUrls) {
+    const challenge = commonUtils.genChallenge(30)
+    const res_1 = await fetch(tokenNotifyUrls[transaction_id].replace('stp://', 'http://'), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            transaction_id: transaction_id,
+            challenge: challenge
+        })
+    })
+    const vendorVerifChall = await res_1.json()
+    commonUtils.logMsg('VendorVerifChall', vendorVerifChall)
+    if (!vendorVerifChall.success) {
+        return [ vendorVerifChall.error_code, vendorVerifChall.error_message ]
+    }
+
+    let providerVerifNotify = {}
+    if (!commonUtils.verifyChallResponse(challenge, vendorVerifChall.response, tokens[transaction_id].signatures.vendor_key)) {
+        providerVerifNotify = {
+            success: false,
+            error_code: 'AUTH_FAILED',
+            error_message: 'The vendor\'s response to the challenge was not appropriate',
+        }
+    } else {
+        providerVerifNotify = {
+            success: true,
+            response: commonUtils.signChall(vendorVerifChall.challenge, privkey),
+            notify_verb: notify_verb
+        }
+    }
+    const res_2 = await fetch(vendorVerifChall.next_url.replace('stp://', 'http://'), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(providerVerifNotify)
+    })
+    const vendorAck = await res_2.json()
+    commonUtils.logMsg('VendorAck', vendorAck)
+    
+    if (!providerVerifNotify.success) {
+        return [ providerVerifNotify.error_code, providerVerifNotify.error_message ]
+    }
+    if (!vendorAck.success) {
+        return [ vendorAck.error_code, vendorAck.error_message ]
+    }
+    
+    if (notify_verb == 'REVOKE') { 
+        delete tokens[transaction_id]
+        delete tokenNotifyUrls[transaction_id]
+    }
+    return [ null, null ]
+}
+
+
 export default {
-    generateProviderHelloMsg, getVendorTokenMsg, verifyVendorToken, signToken, sendProviderTokenMsg, isRefreshedTokenValid
+    generateProviderHelloMsg, getVendorTokenMsg, verifyVendorToken, signToken, sendProviderTokenMsg, isRefreshedTokenValid, notify
 }

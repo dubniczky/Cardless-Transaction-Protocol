@@ -8,6 +8,7 @@
 </head>
 <body>
     <h1>STP Provider Example App</h1>
+    <h2>New token</h2>
     <form action="/start" method="POST">
         <label for="url">URL:</label>
         <input type="text" id="url" name="url" size="80" required>
@@ -15,5 +16,27 @@
 
         <button type="submit">Start transaction</button>
     </form>
+
+    <h2>Previous tokens</h2>
+    <ul id="tokens">
+    </ul>
+    <script>
+        fetch('/tokens')
+            .then(res => res.json())
+            .then(res => {
+                let listHtml = ''
+                for (let i in res) {
+                    const token = res[i].transaction
+                    listHtml += `<li>` +
+                        `<b>${token.id}</b>: ` +
+                        `${token.amount} ${token.currency} ` +
+                        `(${token.recurring ? token.recurring.period + '[' + token.recurring.index + ']' : 'one time'}) ` +
+                        `<a href="/token/${token.id}">Show</a> ` +
+                        `<a href="/revoke/${token.id}">Revoke</a> ` +
+                    `</li>`
+                }
+                document.getElementById('tokens').innerHTML = listHtml
+            })
+    </script>
 </body>
 </html>

@@ -12,6 +12,7 @@ const port = 8000
 const ongoingTransactions = {}
 const ongoingChallenges = {}
 const tokens = {}
+const tokenNotifyUrls = {}
 
 const privkey = fs.readFileSync('../keys/bank_privkey.pem')
 const pubkey = fs.readFileSync('../keys/bank_pubkey.pem')
@@ -94,7 +95,7 @@ app.post('/verify', async (req, res) => {
         }
     }
 
-    const [ error_code, error_msg ] = await providerUtils.sendProviderTokenMsg(transaction.response_url, providerTokenMsg)
+    const [ vendorAck, error_code, error_msg ] = await providerUtils.sendProviderTokenMsg(transaction.response_url, providerTokenMsg)
     if (error_code) {
         return res.render('error', {
             error_code: error_code,
@@ -103,10 +104,12 @@ app.post('/verify', async (req, res) => {
     }
 
     tokens[token.transaction.id] = token
+    tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
     return res.render('result', {
         token: JSON.stringify(token, null, 4)
     })
 })
+
 
 app.post('/api/stp/change', async (req, res) => {
     commonUtils.logMsg('VendorChall', req.body)
@@ -150,6 +153,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
     }
     if (req.body.change_verb == 'REVOKE') {
         delete tokens[id]
+        delete tokenNotifyUrls[id]
         return res.send({ success: true })
     } else if (req.body.change_verb == 'REFRESH') {
         const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
@@ -180,6 +184,37 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
             error_message: 'Unsupported change_verb'
         })
     }
+})
+
+
+app.get('/tokens', async (req, res) => {
+    return res.send(Object.values(tokens))
+})
+
+
+app.get('/token/:id', async (req, res) => {
+    const id = req.params.id
+    return res.render('token', {
+        id: id,
+        token: JSON.stringify(tokens[id], null, 4)
+    })
+})
+
+
+app.get('/revoke/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in tokens)) {
+        return res.sendStatus(400)
+    }
+
+    const [ err_code, err_msg ] = await providerUtils.notify(id, 'REVOKE', privkey, pubkey, tokens, tokenNotifyUrls)
+    if (err_code) {
+        return res.render('error', {
+            error_code: err_code,
+            error_msg: err_msg
+        })
+    }
+    return res.redirect('/')
 })
 
 
