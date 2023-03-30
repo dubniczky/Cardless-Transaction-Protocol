@@ -256,6 +256,25 @@ token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 Refreshing increments the `transaction.recurring.index` and updates the `transaction.recurring.next`
 
+> Modifying token
+```yaml
+success: true
+response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+# Change verb
+change_verb: MODIFY
+# The subject of modification
+modification:
+  # (Optional) new amount
+  amount: 12.66
+  # (Optional) new currency
+  currency: USD
+  # (Optional) new period
+  period: monthly
+# The modified transaction JWT signed by the vendor in base64 format
+token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+```
+The vendor can modify the `transaction.amount`, the `transaction.currency` or the `transaction.recurring.period`
+
 > Auth failure
 ```yaml
 success: false
@@ -278,6 +297,22 @@ success: true
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
+> Modification successful
+```yaml
+success: true
+# Modification status
+modification_status: ACCEPTED
+# The modified transaction JWT signed by the both the vendor and the provider in base64 format
+token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+```
+
+> Modification pending
+```yaml
+success: true
+# Modification status
+modification_status: PENDING
+```
+
 > Failure
 ```yaml
 success: false
@@ -293,13 +328,14 @@ error_message: The vendor's response to the challenge was not appropriate
 |INCORRECT_TOKEN|The refreshed token contains incorrect data|
 |INCORRECT_TOKEN_SIGN|The refreshed token is not signed properly|
 |UNKNOWN_CHANGE_VERB|Unsupported change_verb|
+|MODIFICATION_REJECTED|The provider rejected the modification|
 
 The `error_message` can ba customized/localized by the vendor, but not the `error_code`
 
 
 # Example notification
 
-The provider can notify the vendor about changes in the token's validity by sending notification to the `notify_url` sent by the vendor in the token negotiation phase
+The provider can notify the vendor about changes in the token's validity by sending notification to the `notify_url` sent by the vendor in the token negotiation phase. This method can be used to finish pending modification request too.
 
 ## 1. Authentication
 
@@ -308,7 +344,7 @@ The vendor and the provider authenticate each other by signing a challenge sent 
 ### ProviderChall
 
 ```yaml
-# The id of the transaction the vendor wants to change
+# The id of the transaction the provider wants to send notification about
 transaction_id: STPEXPROV_2057169785
 # A random challenge to authenticate the vendor (30 bytes, 40 base64 characters)
 challenge: 1dFMqKhh3TGUwkBfW6FmZhE+fURLNcaec0LArkG9
@@ -351,6 +387,28 @@ response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
 notify_verb: REVOKE
 ```
 
+> Accepting pending token modification
+```yaml
+success: true
+response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
+# Notification verb
+notify_verb: FINISH_MODIFICATION
+# Modification status
+modification_status: ACCEPTED
+# The modified transaction JWT signed by the both the vendor and the provider in base64 format
+token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+```
+
+> Rejecting pending token modification
+```yaml
+success: true
+response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
+# Notification verb
+notify_verb: FINISH_MODIFICATION
+# Modification status
+modification_status: REJECTED
+```
+
 > Auth failure
 ```yaml
 success: false
@@ -360,7 +418,7 @@ error_message: The vendor's response to the challenge was not appropriate
 
 ### VendorAck
 
-> Revoking successful
+> Operation successful
 ```yaml
 # Whether the authentication and the notification was successful
 success: true
