@@ -177,6 +177,22 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
             success: true,
             token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
         })
+    } else if (req.body.change_verb == 'MODIFY') {
+        const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+        if (!providerUtils.verifyVendorToken(token)) {
+            return res.send({
+                success: false,
+                error_code: 'INCORRECT_TOKEN_SIGN',
+                error_message: 'The modified token is not signed properly'
+            })
+        }
+        const fullToken = providerUtils.signToken(token, privkey, pubkey)
+        tokens[id] = fullToken
+        return res.send({
+            success: true,
+            modification_status: 'ACCEPTED',
+            token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
+        })
     } else {
         return res.send({
             success: false,

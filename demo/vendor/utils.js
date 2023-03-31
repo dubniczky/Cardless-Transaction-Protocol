@@ -86,6 +86,34 @@ function generateRefreshedToken(token, privkey, pubkey) {
 }
 
 /**
+ * Generates the modified token
+ * @param {Object} token - The original token 
+ * @param {Buffer} privkey - The private key of the vendor as a .pem Buffer
+ * @param {Buffer} pubkey - The public key of the vendor as a .pem Buffer
+ * @param {Object} modificationData - The modification data
+ * @param {number} modificationData.amount - The amount of the modification 
+ * @param {string} modificationData.currency - The currency code of the modification
+ * @param {string?} modificationData.period - The recurrance period of the modification. One of: null, monthly, quarterly, annual
+ * @returns {Object} The modified token
+ */
+function generateModifiedToken(token, privkey, pubkey, modificationData) {
+    let transaction = JSON.parse(JSON.stringify(token.transaction))
+    transaction.amount = modificationData.amount
+    transaction.currency = modificationData.currency
+    if (modificationData.period) {
+        transaction.recurring = {
+            period: modificationData.period,
+            next: commonUtils.getNextRecurrance(new Date(Date.now()), modificationData.period).toISOString(),
+            index: 0
+        }
+    } else {
+        transaction.recurring = null
+    }
+    
+    return constructAndSignToken(transaction, privkey, pubkey)
+}
+
+/**
  * Generates the `VendorToken` message
  * @param {string} transId - The ID of the 2nd round trip of the transaction
  * @param {number} port - The port of the vendor server
@@ -163,10 +191,15 @@ function checkProviderTokenMsg(params) {
  * @param {Buffer} pubkey - The public key of the vendor as a .pem Buffer
  * @param {Object} tokens - Dictionary of all saved tokens. Key: `{string}` t_id, value: `{Object}` token
  * @param {Object} tokenChangeUrls - Dictionary of all saved token change URLs. Key: `{string}` t_id, value: `{string}` url
+ * @param {Object?} modificationData - The modification data
+ * @param {number} modificationData.amount - The amount of the modification 
+ * @param {string} modificationData.currency - The currency code of the modification
+ * @param {string?} modificationData.period - The recurrance period of the modification. One of: null, monthly, quarterly, annual
  * @returns {[string?, string?]} The result of the change request. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function changeRequest(transaction_id, change_verb, privkey, pubkey, tokens, tokenChangeUrls) {
+async function changeRequest(transaction_id, change_verb, privkey, pubkey, tokens, tokenChangeUrls, modificationData = null) {
     const challenge = commonUtils.genChallenge(30)
+    console.log(modificationData)
     const res_1 = await fetch(tokenChangeUrls[transaction_id].replace('stp://', 'http://'), {
         method: 'POST',
         headers: {
@@ -200,6 +233,10 @@ async function changeRequest(transaction_id, change_verb, privkey, pubkey, token
         if (change_verb == 'REFRESH') {
             const refreshedToken = generateRefreshedToken(tokens[transaction_id], privkey, pubkey)
             vendorVerifChange.token = Buffer.from(JSON.stringify(refreshedToken)).toString('base64')
+        } else if (change_verb == 'MODIFY') {
+            vendorVerifChange.modification = modificationData
+            const modifiedToken = generateModifiedToken(tokens[transaction_id], privkey, pubkey, modificationData)
+            vendorVerifChange.token = Buffer.from(JSON.stringify(modifiedToken)).toString('base64')
         }
     }
     const res_2 = await fetch(providerVerifChall.next_url.replace('stp://', 'http://'), {
@@ -225,6 +262,10 @@ async function changeRequest(transaction_id, change_verb, privkey, pubkey, token
     } else if (change_verb == 'REVOKE') { 
         delete tokens[transaction_id]
         delete tokenChangeUrls[transaction_id]
+    } else if (change_verb == 'MODIFY') { 
+        if (providerAck.modification_status == 'ACCEPTED') {
+            tokens[transaction_id] = JSON.parse(Buffer.from(providerAck.token, 'base64'))
+        }
     }
     return [ null, null ]
 }

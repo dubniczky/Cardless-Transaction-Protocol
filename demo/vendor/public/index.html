@@ -46,6 +46,7 @@
                         `(${token.recurring ? token.recurring.period + '[' + token.recurring.index + ']' : 'one time'}) ` +
                         `<a href="/token/${token.id}">Show</a> ` +
                         `<a href="/revoke/${token.id}">Revoke</a> ` +
+                        `<a href="/modify/${token.id}">Modify</a> ` +
                         `${token.recurring ? '<a href="/refresh/' + token.id + '">Refresh</a>' : ''}` +
                     `</li>`
                 }

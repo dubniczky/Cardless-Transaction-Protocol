@@ -250,6 +250,46 @@ app.get('/refresh/:id', async (req, res) => {
 })
 
 
+app.get('/modify/:id', async (req, res) => {
+    const id = req.params.id
+    if (!(id in tokens)) {
+        return res.sendStatus(400)
+    }
+    const recurringData =  tokens[id].transaction.recurring
+    return res.render('modify', {
+        id: id,
+        amount: tokens[id].transaction.amount,
+        currency: tokens[id].transaction.currency,
+        recurring: recurringData ? recurringData.period : 'one_time'
+    })
+})
+
+
+app.post('/modify/:id', async (req, res) => {
+    const id = req.params.id
+    const modificationData = {
+        amount: req.body.amount,
+        currency: req.body.currency,
+        period: req.body.recurring == 'one_time' ? null : req.params.recurring
+    }
+    console.log(modificationData)
+    console.log(req.params)
+
+    if (!(id in tokens)) {
+        return res.sendStatus(400)
+    }
+
+    const [ err_code, err_msg ] = await vendorUtils.changeRequest(id, 'MODIFY', privkey, pubkey, tokens, tokenChangeUrls, modificationData)
+    if (err_code) {
+        return res.render('error', {
+            error_code: err_code,
+            error_msg: err_msg
+        })
+    }
+    return res.redirect('/')
+})
+
+
 app.listen(port, () => {
     console.log(`Vendor app listening on port http://localhost:${port}`)
 })
