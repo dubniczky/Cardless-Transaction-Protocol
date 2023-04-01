@@ -11,8 +11,10 @@ const port = 8000
 
 const ongoingTransactions = {}
 const ongoingChallenges = {}
+const ongoingModifications = []
 const tokens = {}
 const tokenNotifyUrls = {}
+let instantlyAcceptModify = true
 
 const privkey = fs.readFileSync('../keys/bank_privkey.pem')
 const pubkey = fs.readFileSync('../keys/bank_pubkey.pem')
@@ -111,6 +113,13 @@ app.post('/verify', async (req, res) => {
 })
 
 
+app.post('/set_accept_modify', async (req, res) => {
+    instantlyAcceptModify = req.body.value
+    console.log('instantlyAcceptModify set to', instantlyAcceptModify)
+    return res.send('')
+})
+
+
 app.post('/api/stp/change', async (req, res) => {
     commonUtils.logMsg('VendorChall', req.body)
     if (!(req.body.transaction_id in tokens)) {
@@ -186,13 +195,25 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
                 error_message: 'The modified token is not signed properly'
             })
         }
-        const fullToken = providerUtils.signToken(token, privkey, pubkey)
-        tokens[id] = fullToken
-        return res.send({
-            success: true,
-            modification_status: 'ACCEPTED',
-            token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
-        })
+        if (instantlyAcceptModify) {
+            const fullToken = providerUtils.signToken(token, privkey, pubkey)
+            tokens[id] = fullToken
+            return res.send({
+                success: true,
+                modification_status: 'ACCEPTED',
+                token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
+            })
+        } else {
+            ongoingModifications.push({
+                id: id,
+                modification: req.body.modification,
+                token: token,
+            })
+            return res.send({
+                success: true,
+                modification_status: 'PENDING'
+            })
+        }
     } else {
         return res.send({
             success: false,
@@ -230,6 +251,36 @@ app.get('/revoke/:id', async (req, res) => {
             error_msg: err_msg
         })
     }
+    return res.redirect('/')
+})
+
+
+app.get('/ongoing_modification', async (req, res) => {
+    console.log(ongoingModifications.length)
+    if (ongoingModifications.length != 0) {
+        return res.send(ongoingModifications[ongoingModifications.length - 1])
+    }
+    return res.send({ not_found: true })
+})
+
+
+app.post('/handle_modification/:id', async (req, res) => {
+    const id = req.params.id
+    const accept = req.body.accept
+    const modifIndex = ongoingModifications.findIndex((elem) => elem.id == id )
+    const modification = ongoingModifications[modifIndex]
+    ongoingModifications.splice(modifIndex, 1)
+
+    const [ err_code, err_msg ] = await providerUtils.notify(id, 'FINISH_MODIFICATION', privkey, pubkey, tokens, tokenNotifyUrls, { accept: accept, token: modification.token })
+    if (err_code) {
+        return res.render('error', {
+            error_code: err_code,
+            error_msg: err_msg
+        })
+    }
+
+    tokens[id] = providerUtils.signToken(modification.token, privkey, pubkey)
+    
     return res.redirect('/')
 })
 

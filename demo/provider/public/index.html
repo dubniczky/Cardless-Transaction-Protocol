@@ -17,6 +17,10 @@
         <button type="submit">Start transaction</button>
     </form>
 
+    <h2>Settings</h2>
+    <input type="checkbox" id="accept_modify" onchange="acceptModifyChanged()" checked/>
+    Instantly accept modification<br>
+
     <h2>Previous tokens</h2>
     <ul id="tokens">
     </ul>
@@ -37,6 +41,41 @@
                 }
                 document.getElementById('tokens').innerHTML = listHtml
             })
+        acceptModifyChanged()
+        setTimeout(checkOngoinModifications, 10000)
+        
+        function acceptModifyChanged() {
+            fetch('/set_accept_modify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ value: document.getElementById('accept_modify').checked })
+            })
+        }
+
+        function formatModification(res) {
+            return `Vendor wants to modify transaction ${res.id}\nModification ${JSON.stringify(res.modification)}`
+        }
+
+        function checkOngoinModifications() {
+            fetch('/ongoing_modification')
+                .then(res => res.json())
+                .then(res => {
+                    if (res.id) {
+                        console.log(formatModification(res))
+                        const accepted = confirm(formatModification(res))
+                        fetch(`/handle_modification/${res.id}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ accept: accepted })
+                        })
+                    }
+                })
+            setTimeout(checkOngoinModifications, 10000)
+        }
     </script>
 </body>
 </html>

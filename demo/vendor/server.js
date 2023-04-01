@@ -186,6 +186,11 @@ app.post('/api/stp/notify_next/:id', async (req, res) => {
         delete tokens[id]
         delete tokenChangeUrls[id]
         return res.send({ success: true })
+    } else if (req.body.notify_verb == 'FINISH_MODIFICATION') {
+        if (req.body.modification_status == 'ACCEPTED') {
+            tokens[id] = JSON.parse(Buffer.from(req.body.token, 'base64'))
+        }
+        return res.send({ success: true })
     } else {
         return res.send({
             success: false,

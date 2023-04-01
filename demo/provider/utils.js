@@ -158,9 +158,12 @@ function isRefreshedTokenValid(oldToken, newToken) {
  * @param {Buffer} pubkey - The public key of the provider as a .pem Buffer
  * @param {Object} tokens - Dictionary of all saved tokens. Key: `{string}` t_id, value: `{Object}` token
  * @param {Object} tokenNotifyUrls - Dictionary of all saved token notification URLs. Key: `{string}` t_id, value: `{string}` url
+ * @param {Object?} modificationData - The modification data
+ * @param {boolean} modificationData.accept - Whether the modification was accepted 
+ * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, tokenNotifyUrls) {
+async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, tokenNotifyUrls, modificationData = null) {
     const challenge = commonUtils.genChallenge(30)
     const res_1 = await fetch(tokenNotifyUrls[transaction_id].replace('stp://', 'http://'), {
         method: 'POST',
@@ -191,6 +194,15 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
             success: true,
             response: commonUtils.signChall(vendorVerifChall.challenge, privkey),
             notify_verb: notify_verb
+        }
+        if (notify_verb == 'FINISH_MODIFICATION') {
+            if (modificationData.accept) {
+                providerVerifNotify.modification_status = 'ACCEPTED'
+                const modifiedFullToken = signToken(modificationData.token, privkey, pubkey)
+                providerVerifNotify.token = Buffer.from(JSON.stringify(modifiedFullToken)).toString('base64')
+            } else {
+                providerVerifNotify.modification_status = 'REJECTED'
+            }
         }
     }
     const res_2 = await fetch(vendorVerifChall.next_url.replace('stp://', 'http://'), {
