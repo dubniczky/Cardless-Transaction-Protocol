@@ -1,0 +1,19 @@
+- Abstract
+- Introduction
+    - Purpose
+    - Issues with bank cards / implications of breaches
+    - Our proposed solution
+- Cryptography
+    - Hashing (PQ)
+    - Asymmetric Cryptography (PQ)
+    - Digital Signature (PQ)
+- Communication Protocol
+    - Why HTTP/HTTPS
+    - Token exchange protocol over HTTPS
+    - Token alteration protocol over HTTPS
+- Demonstration
+    - Implementation details
+    - Benchmarks
+    - Potential Improvements
+- Conclusion
+- Special Thanks
