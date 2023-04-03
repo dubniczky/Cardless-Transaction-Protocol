@@ -270,6 +270,28 @@ async function changeRequest(transaction_id, change_verb, privkey, pubkey, token
     return [ null, null ]
 }
 
+function recurringOptionToPeriod(recurringOption) {
+    if (recurringOption === 'one_time') {
+        return null
+    }
+    return recurringOption
+}
+
+function generateNewTransactionUrl(req) {
+    if (!req.body.amount || !req.body.currency || !req.body.recurring) {
+        return null
+    }
+    
+    const uuid = crypto.randomUUID()
+    ongoingRequests[uuid] = {
+        amount: req.body.amount,
+        currency: req.body.currency,
+        period: recurringOptionToPeriod(req.body.recurring)
+    }
+    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(ongoingRequests[uuid])}\n`)
+    return uuid
+}
+
 export default {
-    generateVendorToken, generateVendorTokenMsg, checkProviderTokenMsg, changeRequest
+    generateNewTransactionUrl, generateVendorToken, generateVendorTokenMsg, checkProviderTokenMsg, changeRequest
 }

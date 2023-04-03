@@ -9,6 +9,7 @@ import vendorUtils from './utils.js'
 const app = express()
 const port = 3000
 
+// TODO move to utils?
 const ongoingRequests = {}
 const ongoingResponses = {}
 const ongoingRequestPins = {}
@@ -31,17 +32,11 @@ app.use('/', express.static('public'))
 
 
 app.post('/gen_url', async (req, res) => {
-    if (!req.body.amount || !req.body.currency || !req.body.recurring) {
+    const uuid = vendorUtils.generateNewTransactionUrl(req)
+    if (!uuid) {
         return res.sendStatus(400)
     }
     
-    const uuid = crypto.randomUUID()
-    ongoingRequests[uuid] = {
-        amount: req.body.amount,
-        currency: req.body.currency,
-        period: req.body.recurring == 'one_time' ? null : req.body.recurring
-    }
-    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(ongoingRequests[uuid])}\n`)
     return res.render('show_url', {
         url: `stp://localhost:${port}/api/stp/request/${uuid}`,
     })
