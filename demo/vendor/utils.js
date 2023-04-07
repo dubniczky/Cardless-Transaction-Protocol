@@ -2,6 +2,204 @@ import crypto from 'crypto'
 
 import commonUtils from '../common/utils.js'
 
+const protocolState = {
+    ongoing: {
+        requests: {},
+        responses: {},
+        requestPins: {},
+        challenges: {}
+    },
+    tokens: {},
+    tokenChangeUrls: {}
+}
+
+const keys = {
+    private: fs.readFileSync('../keys/vendor_privkey.pem'),
+    public: fs.readFileSync('../keys/vendor_pubkey.pem'),
+    bankPublic: fs.readFileSync('../keys/bank_pubkey.pem')
+}
+
+
+function validateRes(res, isValid, err_code = null, err_msg = null) {
+    if (!isValid) {
+        if (err_code && err_msg) {
+            res.send({
+                success: false,
+                error_code: err_code,
+                error_message: err_msg
+            })
+        } else {
+            res.sendStatus(400)
+        }
+        return false
+    }
+    return true
+}
+
+
+function doesBodyContainFields(req, res, fields) {
+    return validateRes(res, fields.every((field) => field in req.body))
+}
+
+
+function isOngoingRequest(res, uuid) {
+    return validateRes(res, uuid in protocolState.ongoing.requests)
+}
+
+
+function isOngoingResponse(res, uuid) {
+    return validateRes(res, uuid in protocolState.ongoing.responses)
+}
+
+
+function isOngoingChallenge(res, uuid) {
+    return validateRes(res, uuid in protocolState.ongoing.challenges)
+}
+
+
+function verifyUrlSignature(res, uuid, signature) {
+    return validateRes(res, crypto.verify(null, Buffer.from(uuid), keys.bankPublic, new Buffer(signature, 'base64')),
+        'INVALID_SIGNATURE', 'url_signature is not a valid signature of the provider')
+}
+
+
+function doesTokenExist(res, id) {
+    return validateRes(res, id in protocolState.tokens, 'ID_NOT_FOUND', 'The given transaction_id has no associated tokens')
+}
+
+
+function recurringOptionToPeriod(recurringOption) {
+    if (recurringOption === 'one_time') {
+        return null
+    }
+    return recurringOption
+}
+
+
+function generateNewTransactionUrl(req) {
+    const uuid = crypto.randomUUID()
+    protocolState.ongoing.requests[uuid] = {
+        amount: req.body.amount,
+        currency: req.body.currency,
+        period: recurringOptionToPeriod(req.body.recurring)
+    }
+    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(ongoingRequests[uuid])}\n`)
+    return uuid
+}
+
+
+function sendVendorTokenMsg(req, res, uuid, port) {
+    protocolState.ongoing.requestPins[uuid] = req.body.verification_pin
+    const currReq = protocolState.ongoing.requests[uuid]
+    delete protocolState.ongoing.requests[uuid]
+    const transId = crypto.randomUUID()
+    protocolState.ongoing.responses[transId] = currReq
+
+    const token = vendorUtils.generateVendorToken(req.body, currReq, privkey, pubkey)
+    const respMessage = vendorUtils.generateVendorTokenMsg(transId, port, token, currReq)
+    res.send(respMessage)
+}
+
+
+async function sleep(ms) {
+    await new Promise(r => setTimeout(r, 100))
+}
+
+
+async function waitAndSendRequestPin(res, uuid) {
+    if (!(uuid in protocolState.ongoing.requests || uuid in protocolState.ongoing.requestPins)) {
+        res.sendStatus(400)
+        return
+    }
+
+    while (!(uuid in ongoingRequestPins)) {
+        await sleep(100)
+    }
+
+    const pin = protocolState.ongoing.requestPins[uuid]
+    delete protocolState.ongoing.requestPins[uuid]
+    res.send(pin.toString())
+}
+
+
+function sendVendorAck(req, res, port) {
+    const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+    protocolState.tokens[token.transaction.id] = token
+    protocolState.tokenChangeUrls[token.transaction.id] = req.body.change_url
+    console.log('Transaction token:', token)
+    res.send({
+        success: true,
+        notify_url: `stp://localhost:${port}/api/stp/notify`
+    })
+}
+
+function sendVendorVerifChall(req, res) {
+    const challenge = commonUtils.genChallenge(30)
+    protocolState.ongoing.challenges[req.body.transaction_id] = challenge
+    res.send({
+        success: true,
+        response: commonUtils.signChall(req.body.challenge, keys.private),
+        challenge: challenge,
+        next_url: `stp://localhost:${port}/api/stp/notify_next/${req.body.transaction_id}`
+    })
+}
+
+
+function popChallenge(id) {
+    const challenge = protocolState.ongoing.challenges[id]
+    delete protocolState.ongoing.challenges[id]
+    return challenge
+}
+
+
+function checkProviderVerifNotify(req, res, id, challenge) {
+    if (!validateRes(res, req.body.success)) {
+        return false
+    }
+
+    return validateRes(res,
+        commonUtils.verifyChallResponse(challenge, req.body.response, protocolState.tokens[id].signatures.provider_key),
+        'AUTH_FAILED', 'The provider\'s response to the challenge was not appropriate')
+}
+
+
+function handleRevokeNotification(res, id) {
+    delete protocolState.tokens[id]
+    delete protocolState.tokenChangeUrls[id]
+    res.send({ success: true })
+}
+
+
+function handleFinishModifyNotification(req, res, id) {
+    if (req.body.modification_status == 'ACCEPTED') {
+        protocolState.tokens[id] = JSON.parse(Buffer.from(req.body.token, 'base64'))
+    }
+    res.send({ success: true })
+}
+
+
+function handleUnknownNotification(res) {
+    res.send({
+        success: false,
+        error_code: 'UNKNOWN_NOTIFY_VERB',
+        error_message: 'Unsupported notify_verb'
+    })
+}
+
+
+function getAllTokensList() {
+    return Object.values(protocolState.tokens)
+}
+
+
+function getToken(id) {
+    return protocolState.tokens[id]
+}
+
+
+function formatJSON(obj) {
+    return JSON.stringify(obj, null, 4)
+}
 
 /**
  * Constructs and signs the vendor STP token from the transaction data
@@ -166,21 +364,17 @@ function verifyToken(token) {
  * @param {Object} params - The `ProviderToken` message
  * @returns {[string?, string?]} The result of the check. `[ null, null ]` if the check return no errors, `[ err_code, err_msg ]` otherwise
  */
-function checkProviderTokenMsg(params) {
-    if (!params.allowed) {
-        return [ 'TRANSACTION_DECLINED', 'The transaction was declined by the user' ]
+function checkProviderTokenMsg(req, res) {
+    if (!validateRes(res, req.body.allowed, 'TRANSACTION_DECLINED', 'The transaction was declined by the user')) {
+        return false
     }
 
-    if (!params.token) {
-        return [ 'TOKEN_NOT_FOUND', 'The transaction token is not found' ]
+    if (!validateRes(res, req.body.token, 'TOKEN_NOT_FOUND', 'The transaction token is not found')) {
+        return false
     }
 
-    const token = JSON.parse(Buffer.from(params.token, 'base64'))
-    if (!verifyToken(token)) {
-        return [ 'TOKEN_INVALID', 'The transaction token has an invalid provider signature' ]
-    }
-
-    return [ null, null ]
+    const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+    return validateRes(res, verifyToken(token), 'TOKEN_INVALID', 'The transaction token has an invalid provider signature')
 }
 
 /**
@@ -270,28 +464,6 @@ async function changeRequest(transaction_id, change_verb, privkey, pubkey, token
     return [ null, null ]
 }
 
-function recurringOptionToPeriod(recurringOption) {
-    if (recurringOption === 'one_time') {
-        return null
-    }
-    return recurringOption
-}
-
-function generateNewTransactionUrl(req) {
-    if (!req.body.amount || !req.body.currency || !req.body.recurring) {
-        return null
-    }
-    
-    const uuid = crypto.randomUUID()
-    ongoingRequests[uuid] = {
-        amount: req.body.amount,
-        currency: req.body.currency,
-        period: recurringOptionToPeriod(req.body.recurring)
-    }
-    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(ongoingRequests[uuid])}\n`)
-    return uuid
-}
-
 export default {
-    generateNewTransactionUrl, generateVendorToken, generateVendorTokenMsg, checkProviderTokenMsg, changeRequest
+    doesBodyContainFields, generateNewTransactionUrl, generateVendorToken, generateVendorTokenMsg, checkProviderTokenMsg, changeRequest
 }
