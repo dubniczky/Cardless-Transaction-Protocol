@@ -23,18 +23,19 @@ function copyObject(obj) {
 
 /**
  * Increment the given date by the given period
- * @param {Date} date - The date
+ * @param {number|string} dateData - Data to cosntruct Date with. Can me unix timestamp or datestring
  * @param {string} period - The period. One of: monthly, quarterly, annual
- * @returns {Date} The incremented date
+ * @returns {string} The incremented date as ISO string
  */
-function getNextRecurrance(date, period) {
+function getNextRecurrance(dateData, period) {
+    const date = new Date(dateData)
     switch (period) {
         case 'monthly':
-            return new Date(date.setMonth(date.getMonth() + 1))
+            return new Date(date.setMonth(date.getMonth() + 1)).toISOString()
         case 'quarterly':
-            return new Date(date.setMonth(date.getMonth() + 3))
+            return new Date(date.setMonth(date.getMonth() + 3)).toISOString()
         case 'annual':
-            return new Date(date.setFullYear(date.getFullYear() + 1))
+            return new Date(date.setFullYear(date.getFullYear() + 1)).toISOString()
     }
 }
 
@@ -103,7 +104,7 @@ function signChall(challenge, privkey) {
 }
 
 /**
- * Gen the ID from an STP URL (the part after the last `/`)
+ * Get the ID from an STP URL (the part after the last `/`)
  * @param {string} url - The STP URL
  * @return {string} The ID
  */
@@ -111,7 +112,67 @@ function cutIdFromUrl(url) {
     return url.substring(url.lastIndexOf('/') + 1)
 }
 
+/**
+ * Sleep the given number of milliseconds
+ * @param {number} ms - amount of milliseconds to sleep
+ */
+async function sleep(ms) {
+    await new Promise(r => setTimeout(r, 100))
+}
+
+/**
+ * Format object to well indented string
+ * @param {Object} obj - the object to format
+ * @returns {string} The formated object
+ */
+function formatJSON(obj) {
+    return JSON.stringify(obj, null, 4)
+}
+
+/**
+ * Converts base64 string to JS object
+ * @param {string} base64 - The stringified JSON encoded in base64 
+ * @returns {Object} The JS object
+ */
+function base64ToObject(base64) {
+    return JSON.parse(Buffer.from(req.body.token, 'base64'))
+}
+
+/**
+ * Converts JS object to base64 string
+ * @param {Object} obj - The stringified JSON encoded in base64 
+ * @returns {string} The base64 string
+ */
+function objectToBase64(obj) {
+    return Buffer.from(JSON.stringify(obj)).toString('base64')
+}
+
+/**
+ * Send stp request to a given url
+ * @param {string} stpUrl - The STP URL (starting with stp://)
+ * @param {Object} message - The JS object to send 
+ * @returns {Object} The resulting JS object. If HTTP error occures, then the result has 2 fields: `HTTP_error_code`, `HTTP_error_msg`
+ */
+async function postStpRequest(stpUrl, message) {
+    const res = await fetch(stpUrl.replace('stp://', 'http://'), {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(message)
+    })
+    if (res.status != 200) {
+        return {
+            HTTP_error_code: res.status,
+            HTTP_error_msg: await res.text()
+        }
+    }
+    return await res.json()
+}
+
 export default {
     logMsg, copyObject, getNextRecurrance, pemKeyToRawKeyStr, rawKeyStrToPemPubKey, genChallenge,
-    signChall, verifyChallResponse, cutIdFromUrl
+    signChall, verifyChallResponse, cutIdFromUrl, sleep, formatJSON, base64ToObject, objectToBase64,
+    postStpRequest
 }

@@ -1,9 +1,9 @@
 import express from 'express'
-import crypto from 'crypto'
-import fs from 'fs'
 
-import commonUtils from '../common/utils.js'
-import vendorUtils from './utils.js'
+import utils from '../common/utils.js'
+import validator from './validator.js'
+import protocol from './protocol.js'
+import protocolState from './protocolState.js'
 
 
 const app = express()
@@ -20,11 +20,11 @@ app.use('/', express.static('public'))
 
 
 app.post('/gen_url', async (req, res) => {
-    if (!vendorUtils.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring'])) {
+    if (!validator.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring'])) {
         return
     }
     
-    const uuid = vendorUtils.generateNewTransactionUrl(req)
+    const uuid = protocol.generateNewTransactionUrl(req)
     res.render('show_url', {
         url: `stp://localhost:${port}/api/stp/request/${uuid}`,
     })
@@ -33,72 +33,72 @@ app.post('/gen_url', async (req, res) => {
 
 app.post('/api/stp/request/:uuid', async (req, res) => {
     const uuid = req.params.uuid
-    commonUtils.logMsg('ProviderHello', req.body, uuid)
-    if (!vendorUtils.isOngoingRequest(res, uuid) ||
-        !vendorUtils.doesBodyContainFields(req, res, ['verification_pin', 'url_signature']) ||
-        !vendorUtils.verifyUrlSignature(res, uuid, req.body.url_signature)) {
+    utils.logMsg('ProviderHello', req.body, uuid)
+    if (!validator.isOngoingRequest(res, uuid) ||
+        !validator.doesBodyContainFields(req, res, ['verification_pin', 'url_signature']) ||
+        !validator.verifyUrlSignature(res, uuid, req.body.url_signature)) {
         return
     }
 
-    vendorUtils.sendVendorTokenMsg(req, res, uuid, port)
+    protocol.sendVendorTokenMsg(req, res, uuid, port)
 })
 
 
 app.get('/api/stp/request/:uuid/pin', async (req, res) => {
     const uuid = req.params.uuid
-    await vendorUtils.waitAndSendRequestPin(res, uuid)
+    await protocol.waitAndSendRequestPin(res, uuid)
 })
 
 
 app.post('/api/stp/response/:uuid', async (req, res) => {
     const uuid = req.params.uuid
-    commonUtils.logMsg('ProviderToken', req.body, uuid)
-    if (!vendorUtils.isOngoingResponse(res, uuid) ||
-        !vendorUtils.checkProviderTokenMsg(req, res)) {
+    utils.logMsg('ProviderToken', req.body, uuid)
+    if (!validator.isOngoingResponse(res, uuid) ||
+        !validator.checkProviderTokenMsg(req, res)) {
         return
     }
 
-    vendorUtils.sendVendorAck(req, res, port)
+    protocol.sendVendorAck(req, res, port)
 })
 
 
 app.post('/api/stp/notify', async (req, res) => {
-    commonUtils.logMsg('ProviderChall', req.body)
-    if (!vendorUtils.doesTokenExist(res, req.body.transaction_id)) {
+    utils.logMsg('ProviderChall', req.body)
+    if (!validator.doesTokenExist(res, req.body.transaction_id)) {
         return
     }
 
-    vendorUtils.sendVendorVerifChall(req, res)
+    protocol.sendVendorVerifChall(req, res)
 })
 
 
 app.post('/api/stp/notify_next/:id', async (req, res) => {
     const id = req.params.id
-    commonUtils.logMsg('ProviderVerifNotify', req.body)
-    if (!vendorUtils.isOngoingChallenge(res, id)) {
+    utils.logMsg('ProviderVerifNotify', req.body)
+    if (!validator.isOngoingChallenge(res, id)) {
         return
     }
 
-    const challenge = vendorUtils.popChallenge(id)
-    if (!vendorUtils.checkProviderVerifNotify(req, res, is, challenge)) {
+    const challenge = protocol.popChallenge(id)
+    if (!validator.checkProviderVerifNotify(req, res, is, challenge)) {
         return
     }
 
     switch (req.body.notify_verb) {
         case 'REVOKE':
-            vendorUtils.handleRevokeNotification(res, id)
+            protocol.handleRevokeNotification(res, id)
             break
         case 'FINISH_MODIFICATION':
-            vendorUtils.handleFinishModifyNotification(req, res, id)
+            protocol.handleFinishModifyNotification(req, res, id)
             break
         default:
-            vendorUtils.handleUnknownNotification(res)
+            protocol.handleUnknownNotification(res)
     }
 })
 
 
 app.get('/tokens', async (req, res) => {
-    res.send(vendorUtils.getAllTokensList())
+    res.send(protocolState.getAllTokensList())
 })
 
 
@@ -106,18 +106,18 @@ app.get('/token/:id', async (req, res) => {
     const id = req.params.id
     res.render('token', {
         id: id,
-        token: vendorUtils.formatJSON(vendorUtils.getToken(id))
+        token: utils.formatJSON(protocolState.getToken(id))
     })
 })
 
 
 app.get('/revoke/:id', async (req, res) => {
     const id = req.params.id
-    if (!(id in tokens)) {
-        return res.sendStatus(400)
+    if (!validator.doesTokenExist(res, id)) {
+        return
     }
 
-    const [ err_code, err_msg ] = await vendorUtils.changeRequest(id, 'REVOKE', privkey, pubkey, tokens, tokenChangeUrls)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REVOKE', privkey, pubkey, tokens, tokenChangeUrls)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -130,17 +130,12 @@ app.get('/revoke/:id', async (req, res) => {
 
 app.get('/refresh/:id', async (req, res) => {
     const id = req.params.id
-    if (!(id in tokens)) {
-        return res.sendStatus(400)
-    }
-    if (!tokens[id].transaction.recurring) {
-        return res.render('error', {
-            error_code: 'NON_RECURRING',
-            error_msg: 'Cannot refresh non-recurring transaction token'
-        })
+    if (!validator.doesTokenExist(res, id) ||
+        !validator.isTokenRecurring(res, id)) {
+        return
     }
     
-    const [ err_code, err_msg ] = await vendorUtils.changeRequest(id, 'REFRESH', privkey, pubkey, tokens, tokenChangeUrls)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REFRESH', privkey, pubkey, tokens, tokenChangeUrls)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -153,34 +148,31 @@ app.get('/refresh/:id', async (req, res) => {
 
 app.get('/modify/:id', async (req, res) => {
     const id = req.params.id
-    if (!(id in tokens)) {
-        return res.sendStatus(400)
+    if (!validator.doesTokenExist(res, id)) {
+        return
     }
-    const recurringData =  tokens[id].transaction.recurring
+    const token = protocolState.getToken(id)
     return res.render('modify', {
         id: id,
-        amount: tokens[id].transaction.amount,
-        currency: tokens[id].transaction.currency,
-        recurring: recurringData ? recurringData.period : 'one_time'
+        amount: token.transaction.amount,
+        currency: token.transaction.currency,
+        recurring: protocol.recurringPeriodToOption(token.transaction.recurring)
     })
 })
 
 
 app.post('/modify/:id', async (req, res) => {
     const id = req.params.id
+    if (!validator.doesTokenExist(res, id)) {
+        return
+    }
+    
     const modificationData = {
         amount: req.body.amount,
         currency: req.body.currency,
-        period: req.body.recurring == 'one_time' ? null : req.params.recurring
+        period: protocol.recurringOptionToPeriod(req.body.recurring)
     }
-    console.log(modificationData)
-    console.log(req.params)
-
-    if (!(id in tokens)) {
-        return res.sendStatus(400)
-    }
-
-    const [ err_code, err_msg ] = await vendorUtils.changeRequest(id, 'MODIFY', privkey, pubkey, tokens, tokenChangeUrls, modificationData)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'MODIFY', privkey, pubkey, tokens, tokenChangeUrls, modificationData)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,

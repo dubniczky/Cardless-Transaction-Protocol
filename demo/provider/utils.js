@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import commonUtils from '../common/utils.js'
+import utils from '../common/utils.js'
 
 
 /**
@@ -32,22 +33,12 @@ function generateProviderHelloMsg(url, privkey) {
  * @returns {[Object?, string?, string?]} `[ VendorToken, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
 async function getVendorTokenMsg(url, providerHello) {
-    let vendor_res = await fetch(url.replace('stp://', 'http://'), {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(providerHello)
-    })
-
-    if (vendor_res.status != 200) {
-        const error_msg = await vendor_res.text()
-        return [ null, vendor_res.status, error_msg]
+    const vendor_res = await utils.postStpRequest(url, providerHello)
+    commonUtils.logMsg('VendorToken', vendor_res)
+    if (vendor_res.HTTP_error_code) {
+        return [ null, vendor_res.HTTP_error_code, HTTP_error_msg]
     }
 
-    vendor_res = await vendor_res.json()
-    commonUtils.logMsg('VendorToken', vendor_res)
     if (!vendor_res.success) {
         return [ null, vendor_res.error_code, vendor_res.error_message ]
     }
@@ -97,26 +88,15 @@ function signToken(token, privkey, pubkey) {
  * @returns {[Object?, string?, string?]} `[ VendorAck, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
 async function sendProviderTokenMsg(url, providerTokenMsg) {
-    let vendor_res = await fetch(url.replace('stp://', 'http://'), {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(providerTokenMsg)
-    })
-
+    const vendor_res = await utils.postStpRequest(url, providerTokenMsg)
+    commonUtils.logMsg('VendorAck', vendor_res)
     if (!providerTokenMsg.allowed) {
         return [ null, providerTokenMsg.error_code, providerTokenMsg.error_message ]
     }
-
-    if (vendor_res.status != 200) {
-        const error_msg = await vendor_res.text()
-        return [ null, vendor_res.status, error_msg ]
+    if (vendor_res.HTTP_error_code) {
+        return [ null, vendor_res.HTTP_error_code, HTTP_error_msg ]
     }
 
-    vendor_res = await vendor_res.json()
-    commonUtils.logMsg('VendorAck', vendor_res)
     if (!vendor_res.success) {
         return [ null, vendor_res.error_code, vendor_res.error_message ]
     }
@@ -165,19 +145,15 @@ function isRefreshedTokenValid(oldToken, newToken) {
  */
 async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, tokenNotifyUrls, modificationData = null) {
     const challenge = commonUtils.genChallenge(30)
-    const res_1 = await fetch(tokenNotifyUrls[transaction_id].replace('stp://', 'http://'), {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            transaction_id: transaction_id,
-            challenge: challenge
-        })
+    const vendorVerifChall = await utils.postStpRequest(tokenNotifyUrls[transaction_id], {
+        transaction_id: transaction_id,
+        challenge: challenge
     })
-    const vendorVerifChall = await res_1.json()
     commonUtils.logMsg('VendorVerifChall', vendorVerifChall)
+    if (vendorVerifChall.HTTP_error_code) {
+        return [ vendorVerifChall.HTTP_error_code, vendorVerifChall.HTTP_error_msg ]
+    }
+
     if (!vendorVerifChall.success) {
         return [ vendorVerifChall.error_code, vendorVerifChall.error_message ]
     }
@@ -199,22 +175,17 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
             if (modificationData.accept) {
                 providerVerifNotify.modification_status = 'ACCEPTED'
                 const modifiedFullToken = signToken(modificationData.token, privkey, pubkey)
-                providerVerifNotify.token = Buffer.from(JSON.stringify(modifiedFullToken)).toString('base64')
+                providerVerifNotify.token = utils.objectToBase64(modifiedFullToken)
             } else {
                 providerVerifNotify.modification_status = 'REJECTED'
             }
         }
     }
-    const res_2 = await fetch(vendorVerifChall.next_url.replace('stp://', 'http://'), {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(providerVerifNotify)
-    })
-    const vendorAck = await res_2.json()
+    const vendorAck = await utils.postStpRequest(vendorVerifChall.next_url, providerVerifNotify)
     commonUtils.logMsg('VendorAck', vendorAck)
+    if (vendorAck.HTTP_error_code) {
+        return [ vendorAck.HTTP_error_code, vendorAck.HTTP_error_msg ]
+    }
     
     if (!providerVerifNotify.success) {
         return [ providerVerifNotify.error_code, providerVerifNotify.error_message ]

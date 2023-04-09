@@ -4,6 +4,7 @@ import fs from 'fs'
 
 import commonUtils from '../common/utils.js'
 import providerUtils from './utils.js'
+import utils from './utils.js'
 
 
 const app = express()
@@ -65,7 +66,7 @@ app.post('/verify', async (req, res) => {
     }
 
     const transaction = ongoingTransactions[req.body.t_id]
-    const vendorToken = JSON.parse(Buffer.from(transaction.token, 'base64'))
+    const vendorToken = utils.base64ToObject(transaction.token, 'base64')
     delete ongoingTransactions[req.body.t_id]
 
     let token = {}
@@ -92,7 +93,7 @@ app.post('/verify', async (req, res) => {
         token = providerUtils.signToken(vendorToken, privkey, pubkey)
         providerTokenMsg = {
             allowed: true,
-            token: Buffer.from(JSON.stringify(token)).toString('base64'),
+            token: utils.base64ToObject(token),
             change_url: `stp://localhost:${port}/api/stp/change`
         }
     }
@@ -165,7 +166,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         delete tokenNotifyUrls[id]
         return res.send({ success: true })
     } else if (req.body.change_verb == 'REFRESH') {
-        const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+        const token = utils.base64ToObject(req.body.token, 'base64')
         if (!providerUtils.isRefreshedTokenValid(tokens[id], token)) {
             return res.send({
                 success: false,
@@ -184,10 +185,10 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         tokens[id] = fullToken
         return res.send({
             success: true,
-            token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
+            token: utils.objectToBase64(fullToken)
         })
     } else if (req.body.change_verb == 'MODIFY') {
-        const token = JSON.parse(Buffer.from(req.body.token, 'base64'))
+        const token = utils.base64ToObject(req.body.token, 'base64')
         if (!providerUtils.verifyVendorToken(token)) {
             return res.send({
                 success: false,
@@ -201,7 +202,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
             return res.send({
                 success: true,
                 modification_status: 'ACCEPTED',
-                token: Buffer.from(JSON.stringify(fullToken)).toString('base64')
+                token: utils.objectToBase64(fullToken)
             })
         } else {
             ongoingModifications.push({
