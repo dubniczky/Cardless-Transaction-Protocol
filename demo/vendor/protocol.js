@@ -3,7 +3,11 @@ import crypto from 'crypto'
 import utils from '../common/utils.js'
 import {getProtocolState, getKeys} from './protocolState.js'
 
-
+/**
+ * Convert recurring option to period (one_time -> null)
+ * @param {string} recurringOption - The recurring options
+ * @returns {string} The recurring period
+ */
 function recurringOptionToPeriod(recurringOption) {
     if (recurringOption === 'one_time') {
         return null
@@ -11,7 +15,11 @@ function recurringOptionToPeriod(recurringOption) {
     return recurringOption
 }
 
-
+/**
+ * Convert recurring period to option (null -> one_time)
+ * @param {string} recurringPeriod - The recurring period
+ * @returns {string} The recurring option
+ */
 function recurringPeriodToOption(recurringPeriod) {
     if (recurringPeriod) {
         return recurringPeriod
@@ -19,7 +27,11 @@ function recurringPeriodToOption(recurringPeriod) {
     return 'one_time'
 }
 
-
+/**
+ * Generate STP URL from request
+ * @param {Request} req - The form POST request. Contains fields: `amount`, `currency`, `recurring`
+ * @returns {string} The UUID of the generated URL
+ */
 function generateNewTransactionUrl(req) {
     const uuid = crypto.randomUUID()
     getProtocolState().ongoing.requests[uuid] = {
@@ -31,7 +43,13 @@ function generateNewTransactionUrl(req) {
     return uuid
 }
 
-
+/**
+ * Cosntruct and send the `VendorToken` message
+ * @param {Request} req - The incomming request
+ * @param {Response} res - The response to send the message to
+ * @param {string} uuid - The UUID of the incomming STP URL
+ * @param {number} port - The port of the vendor server 
+ */
 function sendVendorTokenMsg(req, res, uuid, port) {
     getProtocolState().ongoing.requestPins[uuid] = req.body.verification_pin
     const currReq = getProtocolState().ongoing.requests[uuid]
@@ -44,7 +62,12 @@ function sendVendorTokenMsg(req, res, uuid, port) {
     res.send(respMessage)
 }
 
-
+/**
+ * Returns the PIN associated with given UUID
+ * @param {Response} res - The response to send the PIN to
+ * @param {string} uuid - The UUID of the request, from where the PIN is needed 
+ * @returns {string} The PIN as a string
+ */
 async function waitAndSendRequestPin(res, uuid) {
     if (!(uuid in getProtocolState().ongoing.requests || uuid in getProtocolState().ongoing.requestPins)) {
         res.sendStatus(400)
@@ -60,7 +83,12 @@ async function waitAndSendRequestPin(res, uuid) {
     res.send(pin.toString())
 }
 
-
+/**
+ * Handles `ProviderToken` message and sends the `VendorAck` message
+ * @param {Request} req - The `ProviderToken` request
+ * @param {Response} res - The `VendorAck` response
+ * @param {number} port - The port of the vendor server 
+ */
 function sendVendorAck(req, res, port) {
     const token = utils.base64ToObject(req.body.token, 'base64')
     getProtocolState().tokens[token.transaction.id] = token
@@ -72,6 +100,11 @@ function sendVendorAck(req, res, port) {
     })
 }
 
+/**
+ * Responds to the `ProviderChall` with the `VendorVerifChall`
+ * @param {Request} req - The `ProviderChall` request
+ * @param {Response} res - The `VendorVerifChall` response
+ */
 function sendVendorVerifChall(req, res) {
     const challenge = utils.genChallenge(30)
     getProtocolState().ongoing.challenges[req.body.transaction_id] = challenge
@@ -83,7 +116,11 @@ function sendVendorVerifChall(req, res) {
     })
 }
 
-
+/**
+ * 
+ * @param {*} res 
+ * @param {*} id 
+ */
 function handleRevokeNotification(res, id) {
     delete getProtocolState().tokens[id]
     delete getProtocolState().tokenChangeUrls[id]
@@ -323,5 +360,7 @@ async function changeRequest(transaction_id, change_verb, modificationData = nul
 }
 
 export default {
-    
+    recurringOptionToPeriod, recurringPeriodToOption, generateNewTransactionUrl, sendVendorTokenMsg, waitAndSendRequestPin,
+    sendVendorAck, sendVendorVerifChall, handleRevokeNotification, handleFinishModifyNotification, handleUnknownNotification,
+    changeRequest
 }
