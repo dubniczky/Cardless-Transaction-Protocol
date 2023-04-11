@@ -1,18 +1,16 @@
 const protocolState = {
     ongoing: {
-        requests: {},
-        responses: {},
-        requestPins: {},
-        challenges: {}
+        transactions: {},
+        challenges: {},
+        modifications: {}
     },
     tokens: {},
-    tokenChangeUrls: {}
+    tokenNotifyUrls: {}
 }
 
 const keys = {
-    private: fs.readFileSync('../keys/vendor_privkey.pem'),
-    public: fs.readFileSync('../keys/vendor_pubkey.pem'),
-    bankPublic: fs.readFileSync('../keys/bank_pubkey.pem')
+    private: fs.readFileSync('../keys/bank_privkey.pem'),
+    public: fs.readFileSync('../keys/bank_pubkey.pem')
 }
 
 /**
@@ -32,25 +30,14 @@ function getKeys() {
 }
 
 /**
- * Returns the transaction request with the given UUID. The request is removed from the queue
- * @param {string} uuid - The UUID associated with the request
- * @returns {Object} The transaction request object
+ * Returns the tranaction object with the given ID. The object is removed from the queue
+ * @param {string} id - The transaction's ID
+ * @returns {Object} The tranaction object
  */
-function popOngoingRequest(uuid) {
-    const request = protocolState.ongoing.requests[uuid]
-    delete protocolState.ongoing.requests[uuid]
-    return request
-}
-
-/**
- * Returns the transaction request's PIN with the given UUID. The PIN is removed from the queue
- * @param {string} uuid - The UUID associated with the PIN
- * @returns {string} The PIN as a string
- */
-function popOngoingRequestPin(uuid) {
-    const pin = protocolState.ongoing.requestPins[uuid]
-    delete protocolState.ongoing.requestPins[uuid]
-    return pin
+function popOngoingTransaction(id) {
+    const transaction = protocolState.ongoing.transactions[id]
+    delete protocolState.ongoing.transactions[id]
+    return transaction
 }
 
 /**
@@ -82,5 +69,5 @@ function getToken(id) {
 }
 
 export default {
-    getProtocolState, getKeys, popOngoingRequest, popOngoingRequestPin, popOngoingChallenge, getAllTokensList, getToken
+    getProtocolState, getKeys, popOngoingTransaction, popOngoingChallenge, getAllTokensList, getToken
 }

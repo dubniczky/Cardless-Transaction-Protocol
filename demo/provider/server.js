@@ -1,24 +1,14 @@
 import express from 'express'
-import crypto from 'crypto'
-import fs from 'fs'
 
-import commonUtils from '../common/utils.js'
-import providerUtils from './utils.js'
-import utils from './utils.js'
+import utils from '../common/utils.js'
+import protocol from './protocol.js'
+import validator from './validator.js'
 
 
 const app = express()
 const port = 8000
 
-const ongoingTransactions = {}
-const ongoingChallenges = {}
-const ongoingModifications = []
-const tokens = {}
-const tokenNotifyUrls = {}
 let instantlyAcceptModify = true
-
-const privkey = fs.readFileSync('../keys/bank_privkey.pem')
-const pubkey = fs.readFileSync('../keys/bank_pubkey.pem')
 
 
 app.set('views', 'views')
@@ -31,24 +21,18 @@ app.use('/', express.static('public'))
 
 
 app.post('/start', async (req, res) => {
-    if (!req.body.url) {
-        return res.sendStatus(400)
+    if (!utils.doesBodyContainFields(req, res, ['url'])) {
+        return
     }
     
-    const providerHello = providerUtils.generateProviderHelloMsg(req.body.url, privkey)
-    const [ vendor_res, error_code, error_msg ] = await providerUtils.getVendorTokenMsg(req.body.url, providerHello)
-    if (!vendor_res) {
+    const [ vendorToken, error_code, error_msg ] = await protocol.sendProviderHello(req.body.url)
+    if (!vendorToken) {
         return res.render('error', {
             error_code: error_code,
             error_msg: error_msg
         })
     }
     
-    ongoingTransactions[providerHello.transaction_id] = {
-        token: vendor_res?.token,
-        response_url: vendor_res?.response_url,
-        pin: providerHello.verification_pin
-    }
     return res.render('details', {
         vendor_name: vendor_res?.vendor?.name,
         vendor_address: vendor_res?.vendor?.address,
@@ -61,44 +45,17 @@ app.post('/start', async (req, res) => {
 
 
 app.post('/verify', async (req, res) => {
-    if (!(req.body.t_id in ongoingTransactions)) {
-        return res.sendStatus(400)
+    if (!validator.isOngoingTransaction(res, req.body.t_id)) {
+        return
     }
 
-    const transaction = ongoingTransactions[req.body.t_id]
+    const transaction = popOngoingTransaction(req.body.t_id)
     const vendorToken = utils.base64ToObject(transaction.token, 'base64')
-    delete ongoingTransactions[req.body.t_id]
-
-    let token = {}
-    let providerTokenMsg = {}
-    if (req.body.decision != 'accept') {
-        providerTokenMsg = {
-            allowed: false,
-            error_code: 'USER_DECLINED',
-            error_message: 'The user declined the transaction'
-        }
-    } else if (req.body.pin != transaction.pin) {
-        providerTokenMsg = {
-            allowed: false,
-            error_code: 'INCORRECT_PIN',
-            error_message: 'The user entered an incorrect pin'
-        }
-    } else if (!providerUtils.verifyVendorToken(vendorToken)) {
-        providerTokenMsg = {
-            allowed: false,
-            error_code: 'INCORRECT_SIGNATURE',
-            error_message: 'The vendor signature of the token is incorrect'
-        }
-    } else {
-        token = providerUtils.signToken(vendorToken, privkey, pubkey)
-        providerTokenMsg = {
-            allowed: true,
-            token: utils.base64ToObject(token),
-            change_url: `stp://localhost:${port}/api/stp/change`
-        }
+    if (!validator.checkUserInput(req, res, vendorToken)) {
+        return
     }
 
-    const [ vendorAck, error_code, error_msg ] = await providerUtils.sendProviderTokenMsg(transaction.response_url, providerTokenMsg)
+    const [ error_code, error_msg ] = await protocol.handleUserInput(transaction.response_url, vendorToken, port)
     if (error_code) {
         return res.render('error', {
             error_code: error_code,
@@ -106,10 +63,8 @@ app.post('/verify', async (req, res) => {
         })
     }
 
-    tokens[token.transaction.id] = token
-    tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
     return res.render('result', {
-        token: JSON.stringify(token, null, 4)
+        token: utils.formatJSON(protocolState.getToken(req.body.t_id))
     })
 })
 
@@ -122,7 +77,7 @@ app.post('/set_accept_modify', async (req, res) => {
 
 
 app.post('/api/stp/change', async (req, res) => {
-    commonUtils.logMsg('VendorChall', req.body)
+    utils.logMsg('VendorChall', req.body)
     if (!(req.body.transaction_id in tokens)) {
         return res.send({
             success: false,
@@ -131,11 +86,11 @@ app.post('/api/stp/change', async (req, res) => {
         })
     }
 
-    const challenge = commonUtils.genChallenge(30)
+    const challenge = utils.genChallenge(30)
     ongoingChallenges[req.body.transaction_id] = challenge
     return res.send({
         success: true,
-        response: commonUtils.signChall(req.body.challenge, privkey),
+        response: utils.signChall(req.body.challenge, privkey),
         challenge: challenge,
         next_url: `stp://localhost:${port}/api/stp/change_next/${req.body.transaction_id}`
     })
@@ -147,14 +102,14 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
     if (!(id in ongoingChallenges)) {
         return res.sendStatus(400)
     }
-    commonUtils.logMsg('VendorVerifChange', req.body)
+    utils.logMsg('VendorVerifChange', req.body)
     const challenge = ongoingChallenges[id]
     delete ongoingChallenges[id]
 
     if (!req.body.success) {
         return res.send(req.body)
     }
-    if (!commonUtils.verifyChallResponse(challenge, req.body.response, tokens[id].signatures.vendor_key)) {
+    if (!utils.verifyChallResponse(challenge, req.body.response, tokens[id].signatures.vendor_key)) {
         return res.send({
             success: false,
             error_code: 'AUTH_FAILED',
@@ -167,21 +122,21 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         return res.send({ success: true })
     } else if (req.body.change_verb == 'REFRESH') {
         const token = utils.base64ToObject(req.body.token, 'base64')
-        if (!providerUtils.isRefreshedTokenValid(tokens[id], token)) {
+        if (!protocol.isRefreshedTokenValid(tokens[id], token)) {
             return res.send({
                 success: false,
                 error_code: 'INCORRECT_TOKEN',
                 error_message: 'The refreshed token contains incorrect data'
             })
         }
-        if (!providerUtils.verifyVendorToken(token)) {
+        if (!utils.verifyVendorSignatureOfToken(token)) {
             return res.send({
                 success: false,
                 error_code: 'INCORRECT_TOKEN_SIGN',
                 error_message: 'The refreshed token is not signed properly'
             })
         }
-        const fullToken = providerUtils.signToken(token, privkey, pubkey)
+        const fullToken = protocol.signToken(token, privkey, pubkey)
         tokens[id] = fullToken
         return res.send({
             success: true,
@@ -189,7 +144,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         })
     } else if (req.body.change_verb == 'MODIFY') {
         const token = utils.base64ToObject(req.body.token, 'base64')
-        if (!providerUtils.verifyVendorToken(token)) {
+        if (!utils.verifyVendorSignatureOfToken(token)) {
             return res.send({
                 success: false,
                 error_code: 'INCORRECT_TOKEN_SIGN',
@@ -197,7 +152,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
             })
         }
         if (instantlyAcceptModify) {
-            const fullToken = providerUtils.signToken(token, privkey, pubkey)
+            const fullToken = protocol.signToken(token, privkey, pubkey)
             tokens[id] = fullToken
             return res.send({
                 success: true,
@@ -245,7 +200,7 @@ app.get('/revoke/:id', async (req, res) => {
         return res.sendStatus(400)
     }
 
-    const [ err_code, err_msg ] = await providerUtils.notify(id, 'REVOKE', privkey, pubkey, tokens, tokenNotifyUrls)
+    const [ err_code, err_msg ] = await protocol.notify(id, 'REVOKE', privkey, pubkey, tokens, tokenNotifyUrls)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -272,7 +227,7 @@ app.post('/handle_modification/:id', async (req, res) => {
     const modification = ongoingModifications[modifIndex]
     ongoingModifications.splice(modifIndex, 1)
 
-    const [ err_code, err_msg ] = await providerUtils.notify(id, 'FINISH_MODIFICATION', privkey, pubkey, tokens, tokenNotifyUrls, { accept: accept, token: modification.token })
+    const [ err_code, err_msg ] = await protocol.notify(id, 'FINISH_MODIFICATION', privkey, pubkey, tokens, tokenNotifyUrls, { accept: accept, token: modification.token })
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -280,7 +235,7 @@ app.post('/handle_modification/:id', async (req, res) => {
         })
     }
 
-    tokens[id] = providerUtils.signToken(modification.token, privkey, pubkey)
+    tokens[id] = protocol.signToken(modification.token, privkey, pubkey)
     
     return res.redirect('/')
 })

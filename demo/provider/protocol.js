@@ -1,20 +1,18 @@
 import crypto from 'crypto'
 
-import commonUtils from '../common/utils.js'
 import utils from '../common/utils.js'
-
+import { getProtocolState, getKeys } from './protocolState.js'
 
 /**
  * Generates the `ProviderHello` message
- * @param {string} url - The URL, where the message will be sent 
- * @param {Buffer} privkey - The private key of the provider as a .pem Buffer
+ * @param {string} url - The URL, where the message will be sent
  * @returns {Object} The `ProviderHello` message
  */
-function generateProviderHelloMsg(url, privkey) {
+function generateProviderHelloMsg(url) {
     const pin = crypto.randomInt(1000, 10000)
     const t_id = 'STPEXPROV_' + crypto.randomInt(10 ** 9, 10 ** 10)
-    const url_token = commonUtils.cutIdFromUrl(url)
-    const url_signature = crypto.sign(null, Buffer.from(url_token), privkey).toString('base64')
+    const url_token = utils.cutIdFromUrl(url)
+    const url_signature = crypto.sign(null, Buffer.from(url_token), getKeys().private).toString('base64')
     return {
         version: 'v1',
         bank_name: 'STP_Example_Provider',
@@ -29,79 +27,75 @@ function generateProviderHelloMsg(url, privkey) {
 /**
  * Sends `ProviderHello` and processes the reponse (`VendorToken` message)
  * @param {string} url - URL to send the message to
- * @param {Object} providerHello - The `ProviderHello` message
  * @returns {[Object?, string?, string?]} `[ VendorToken, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
-async function getVendorTokenMsg(url, providerHello) {
-    const vendor_res = await utils.postStpRequest(url, providerHello)
-    commonUtils.logMsg('VendorToken', vendor_res)
-    if (vendor_res.HTTP_error_code) {
-        return [ null, vendor_res.HTTP_error_code, HTTP_error_msg]
+async function sendProviderHello(url) {
+    const providerHello = generateProviderHelloMsg(url)
+    const vendorToken = await utils.postStpRequest(url, providerHello)
+    utils.logMsg('VendorToken', vendorToken)
+    if (vendorToken.HTTP_error_code) {
+        return [ null, vendorToken.HTTP_error_code, vendorToken.HTTP_error_msg]
     }
 
-    if (!vendor_res.success) {
-        return [ null, vendor_res.error_code, vendor_res.error_message ]
+    if (!vendorToken.success) {
+        return [ null, vendorToken.error_code, vendorToken.error_message ]
     }
 
+    getProtocolState().ongoing.transactions[providerHello.transaction_id] = {
+        token: vendorToken.token,
+        response_url: vendorToken.response_url,
+        pin: providerHello.verification_pin
+    }
     return [ vendor_res, null, null ]
 }
 
-/**
- * Verifies the vendor STP token
- * @param {Object} token - The vendor STP token 
- * @returns {boolean} The result of the verification
- */
-function verifyVendorToken(token) {
-    let tokenCopy = JSON.parse(JSON.stringify(token))
-    delete tokenCopy.signatures
-
-    let verifier = crypto.createVerify('SHA512')
-    verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
-    return verifier.verify(
-        commonUtils.rawKeyStrToPemPubKey(token.signatures.vendor_key),
-        Buffer.from(token.signatures.vendor, 'base64')
-    )
-}
 
 /**
  * Signes the vendor STP token, creating the full STP token
  * @param {Object} token - The vendor STP token
- * @param {Buffer} privkey - The private key of the provider as a .pem Buffer
- * @param {Buffer} pubkey - The public key of the provider as a .pem Buffer
  * @returns {Object} The full STP token
  */
-function signToken(token, privkey, pubkey) {
+function signToken(token) {
     let signer = crypto.createSign('SHA512')
     signer.update(Buffer.from(JSON.stringify(token)))
-    const signature = signer.sign(privkey)
+    const signature = signer.sign(getKeys().private)
 
-    let signedToken = commonUtils.copyObject(token)
+    let signedToken = utils.copyObject(token)
     signedToken.signatures.provider = signature.toString('base64')
-    signedToken.signatures.provider_key = commonUtils.pemKeyToRawKeyStr(pubkey)
+    signedToken.signatures.provider_key = utils.pemKeyToRawKeyStr(getKeys().public)
     return signedToken
 }
 
 /**
  * Sends the `ProviderToken` message and processes the response (`VendorAck` message)
- * @param {string} url - The URL to send the message to 
- * @param {Object} providerTokenMsg - The `ProviderToken` message
- * @returns {[Object?, string?, string?]} `[ VendorAck, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
+ * @param {string} url - The URL to send the message to
+ * @param {Object} vendorToken - The vendor STP token
+ * @param {number} port - The port of the provider server 
+ * @returns {[string?, string?]} `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function sendProviderTokenMsg(url, providerTokenMsg) {
-    const vendor_res = await utils.postStpRequest(url, providerTokenMsg)
-    commonUtils.logMsg('VendorAck', vendor_res)
+async function handleUserInput(url, vendorToken, port) {
+    const token = providerUtils.signToken(vendorToken)
+    const providerTokenMsg = {
+        allowed: true,
+        token: utils.base64ToObject(token),
+        change_url: `stp://localhost:${port}/api/stp/change`
+    }
+
+    const vendorAck = await utils.postStpRequest(url, providerTokenMsg)
+    utils.logMsg('VendorAck', vendorAck)
     if (!providerTokenMsg.allowed) {
-        return [ null, providerTokenMsg.error_code, providerTokenMsg.error_message ]
+        return [ providerTokenMsg.error_code, providerTokenMsg.error_message ]
     }
-    if (vendor_res.HTTP_error_code) {
-        return [ null, vendor_res.HTTP_error_code, HTTP_error_msg ]
+    if (vendorAck.HTTP_error_code) {
+        return [ vendorAck.HTTP_error_code, vendorAck.HTTP_error_msg ]
+    }
+    if (!vendorAck.success) {
+        return [ vendorAck.error_code, vendorAck.error_message ]
     }
 
-    if (!vendor_res.success) {
-        return [ null, vendor_res.error_code, vendor_res.error_message ]
-    }
-
-    return [ vendor_res, null, null ]
+    getProtocolState().tokens[token.transaction.id] = token
+    getProtocolState().tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
+    return [ null, null ]
 }
 
 /**
@@ -115,8 +109,8 @@ function isRefreshedTokenValid(oldToken, newToken) {
         return false;
     }
 
-    let oldTokenCopy = commonUtils.copyObject(oldToken)
-    let newTokenCopy = commonUtils.copyObject(newToken)
+    let oldTokenCopy = utils.copyObject(oldToken)
+    let newTokenCopy = utils.copyObject(newToken)
 
     delete oldTokenCopy.signatures
     delete oldTokenCopy.transaction.expiry // Skip equality check for now
@@ -134,8 +128,6 @@ function isRefreshedTokenValid(oldToken, newToken) {
  * Make a notification for a given token
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
  * @param {string} notify_verb - The notification verb. Now implemented: REVOKE
- * @param {Buffer} privkey - The private key of the provider as a .pem Buffer
- * @param {Buffer} pubkey - The public key of the provider as a .pem Buffer
  * @param {Object} tokens - Dictionary of all saved tokens. Key: `{string}` t_id, value: `{Object}` token
  * @param {Object} tokenNotifyUrls - Dictionary of all saved token notification URLs. Key: `{string}` t_id, value: `{string}` url
  * @param {Object?} modificationData - The modification data
@@ -143,13 +135,13 @@ function isRefreshedTokenValid(oldToken, newToken) {
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, tokenNotifyUrls, modificationData = null) {
-    const challenge = commonUtils.genChallenge(30)
+async function notify(transaction_id, notify_verb, tokens, tokenNotifyUrls, modificationData = null) {
+    const challenge = utils.genChallenge(30)
     const vendorVerifChall = await utils.postStpRequest(tokenNotifyUrls[transaction_id], {
         transaction_id: transaction_id,
         challenge: challenge
     })
-    commonUtils.logMsg('VendorVerifChall', vendorVerifChall)
+    utils.logMsg('VendorVerifChall', vendorVerifChall)
     if (vendorVerifChall.HTTP_error_code) {
         return [ vendorVerifChall.HTTP_error_code, vendorVerifChall.HTTP_error_msg ]
     }
@@ -159,7 +151,7 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
     }
 
     let providerVerifNotify = {}
-    if (!commonUtils.verifyChallResponse(challenge, vendorVerifChall.response, tokens[transaction_id].signatures.vendor_key)) {
+    if (!utils.verifyChallResponse(challenge, vendorVerifChall.response, tokens[transaction_id].signatures.vendor_key)) {
         providerVerifNotify = {
             success: false,
             error_code: 'AUTH_FAILED',
@@ -168,13 +160,13 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
     } else {
         providerVerifNotify = {
             success: true,
-            response: commonUtils.signChall(vendorVerifChall.challenge, privkey),
+            response: utils.signChall(vendorVerifChall.challenge, getKeys().private),
             notify_verb: notify_verb
         }
         if (notify_verb == 'FINISH_MODIFICATION') {
             if (modificationData.accept) {
                 providerVerifNotify.modification_status = 'ACCEPTED'
-                const modifiedFullToken = signToken(modificationData.token, privkey, pubkey)
+                const modifiedFullToken = signToken(modificationData.token)
                 providerVerifNotify.token = utils.objectToBase64(modifiedFullToken)
             } else {
                 providerVerifNotify.modification_status = 'REJECTED'
@@ -182,7 +174,7 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
         }
     }
     const vendorAck = await utils.postStpRequest(vendorVerifChall.next_url, providerVerifNotify)
-    commonUtils.logMsg('VendorAck', vendorAck)
+    utils.logMsg('VendorAck', vendorAck)
     if (vendorAck.HTTP_error_code) {
         return [ vendorAck.HTTP_error_code, vendorAck.HTTP_error_msg ]
     }
@@ -203,5 +195,5 @@ async function notify(transaction_id, notify_verb, privkey, pubkey, tokens, toke
 
 
 export default {
-    generateProviderHelloMsg, getVendorTokenMsg, verifyVendorToken, signToken, sendProviderTokenMsg, isRefreshedTokenValid, notify
+    sendProviderHello, handleUserInput, isRefreshedTokenValid, notify
 }

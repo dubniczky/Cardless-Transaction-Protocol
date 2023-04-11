@@ -171,8 +171,81 @@ async function postStpRequest(stpUrl, message) {
     return await res.json()
 }
 
+/**
+ * Verifies the provider signature of a full STP token
+ * @param {Object} token - The full STP token
+ * @returns {boolean} The result of the verification
+ */
+function verifyProviderSignatureOfToken(token) {
+    let tokenCopy = utils.copyObject(token)
+    delete tokenCopy.signatures.provider
+    delete tokenCopy.signatures.provider_key
+
+    let verifier = crypto.createVerify('SHA512')
+    verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
+    return verifier.verify(
+        utils.rawKeyStrToPemPubKey(token.signatures.provider_key),
+        Buffer.from(token.signatures.provider, 'base64')
+    )
+}
+
+/**
+ * Verifies the vendor STP token
+ * @param {Object} token - The vendor STP token 
+ * @returns {boolean} The result of the verification
+ */
+function verifyVendorSignatureOfToken(token) {
+    let tokenCopy = utils.copyObject(token)
+    delete tokenCopy.signatures
+
+    let verifier = crypto.createVerify('SHA512')
+    verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
+    return verifier.verify(
+        commonUtils.rawKeyStrToPemPubKey(token.signatures.vendor_key),
+        Buffer.from(token.signatures.vendor, 'base64')
+    )
+}
+
+/**
+ * Sets propper parameters to the repsonse based on validity
+ * @param {Response} res - The response 
+ * @param {boolean} isValid - Whether the input is valid or not 
+ * @param {string?} err_code - Error code of the response. Should be given together with `err_msg`
+ * @param {string?} err_msg - Error message of the response. Should be given together with `err_code`
+ * @param {string} statusVerb - Status verb which is set to false id validation fails
+ * @returns {booleans} Same as `isValid`
+ */
+function validateRes(res, isValid, err_code = null, err_msg = null, statusVerb = 'success') {
+    if (!isValid) {
+        if (err_code && err_msg) {
+            const response = {
+                error_code: err_code,
+                error_message: err_msg
+            }
+            response[statusVerb] = false;
+            res.send(response)
+        } else {
+            res.sendStatus(400)
+        }
+        return false
+    }
+    return true
+}
+
+/**
+ * Helper function to check whether the request's body contains the appropriate fields
+ * @param {Request} req - The request
+ * @param {Reponse} res - The response
+ * @param {string[]} fields - The list of fieldnames as string 
+ * @returns {boolean} `true` if the request contained all fields, otherwise `false`
+ */
+function doesBodyContainFields(req, res, fields) {
+    return validateRes(res, fields.every((field) => field in req.body))
+}
+
 export default {
     logMsg, copyObject, getNextRecurrance, pemKeyToRawKeyStr, rawKeyStrToPemPubKey, genChallenge,
     signChall, verifyChallResponse, cutIdFromUrl, sleep, formatJSON, base64ToObject, objectToBase64,
-    postStpRequest
+    postStpRequest, verifyProviderSignatureOfToken, verifyVendorSignatureOfToken, validateRes,
+    doesBodyContainFields
 }

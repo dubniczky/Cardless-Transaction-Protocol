@@ -20,7 +20,7 @@ app.use('/', express.static('public'))
 
 
 app.post('/gen_url', async (req, res) => {
-    if (!validator.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring'])) {
+    if (!utils.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring'])) {
         return
     }
     
@@ -35,7 +35,7 @@ app.post('/api/stp/request/:uuid', async (req, res) => {
     const uuid = req.params.uuid
     utils.logMsg('ProviderHello', req.body, uuid)
     if (!validator.isOngoingRequest(res, uuid) ||
-        !validator.doesBodyContainFields(req, res, ['verification_pin', 'url_signature']) ||
+        !utils.doesBodyContainFields(req, res, ['verification_pin', 'url_signature']) ||
         !validator.verifyUrlSignature(res, uuid, req.body.url_signature)) {
         return
     }
@@ -58,7 +58,7 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
         return
     }
 
-    protocol.sendVendorAck(req, res, port)
+    protocol.sendVendorAck(req, res, uuid, port)
 })
 
 
@@ -79,7 +79,7 @@ app.post('/api/stp/notify_next/:id', async (req, res) => {
         return
     }
 
-    const challenge = protocol.popChallenge(id)
+    const challenge = protocol.popOngoingChallenge(id)
     if (!validator.checkProviderVerifNotify(req, res, is, challenge)) {
         return
     }
@@ -117,7 +117,7 @@ app.get('/revoke/:id', async (req, res) => {
         return
     }
 
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REVOKE', privkey, pubkey, tokens, tokenChangeUrls)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REVOKE')
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -135,7 +135,7 @@ app.get('/refresh/:id', async (req, res) => {
         return
     }
     
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REFRESH', privkey, pubkey, tokens, tokenChangeUrls)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REFRESH')
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -172,7 +172,7 @@ app.post('/modify/:id', async (req, res) => {
         currency: req.body.currency,
         period: protocol.recurringOptionToPeriod(req.body.recurring)
     }
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'MODIFY', privkey, pubkey, tokens, tokenChangeUrls, modificationData)
+    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'MODIFY', modificationData)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,

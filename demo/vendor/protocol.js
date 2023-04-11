@@ -52,13 +52,12 @@ function generateNewTransactionUrl(req) {
  */
 function sendVendorTokenMsg(req, res, uuid, port) {
     getProtocolState().ongoing.requestPins[uuid] = req.body.verification_pin
-    const currReq = getProtocolState().ongoing.requests[uuid]
-    delete getProtocolState().ongoing.requests[uuid]
+    const currReq = popOngoingRequest(uuid)
     const transId = crypto.randomUUID()
-    getProtocolState().ongoing.responses[transId] = currReq
+    getProtocolState().ongoing.responses[transId] = true
 
-    const token = vendorUtils.generateVendorToken(req.body, currReq, privkey, pubkey)
-    const respMessage = vendorUtils.generateVendorTokenMsg(transId, port, token, currReq)
+    const token = generateVendorToken(req.body, currReq, privkey, pubkey)
+    const respMessage = generateVendorTokenMsg(transId, port, token, currReq)
     res.send(respMessage)
 }
 
@@ -78,18 +77,19 @@ async function waitAndSendRequestPin(res, uuid) {
         await utils.sleep(100)
     }
 
-    const pin = getProtocolState().ongoing.requestPins[uuid]
-    delete getProtocolState().ongoing.requestPins[uuid]
-    res.send(pin.toString())
+    const pin = popOngoingRequestPin(uuid)
+    res.send(pin)
 }
 
 /**
  * Handles `ProviderToken` message and sends the `VendorAck` message
  * @param {Request} req - The `ProviderToken` request
  * @param {Response} res - The `VendorAck` response
+ * @param {string} uuid - The UUID of the response
  * @param {number} port - The port of the vendor server 
  */
-function sendVendorAck(req, res, port) {
+function sendVendorAck(req, res, uuid, port) {
+    delete getProtocolState().ongoing.responses[uuid]
     const token = utils.base64ToObject(req.body.token, 'base64')
     getProtocolState().tokens[token.transaction.id] = token
     getProtocolState().tokenChangeUrls[token.transaction.id] = req.body.change_url
@@ -117,9 +117,9 @@ function sendVendorVerifChall(req, res) {
 }
 
 /**
- * 
- * @param {*} res 
- * @param {*} id 
+ * Handles successful revoke notification
+ * @param {Response} res - The `VendorAck` response 
+ * @param {string} id - The transaction ID related to the notification
  */
 function handleRevokeNotification(res, id) {
     delete getProtocolState().tokens[id]
@@ -127,7 +127,12 @@ function handleRevokeNotification(res, id) {
     res.send({ success: true })
 }
 
-
+/**
+ * Handles successful finished modification notification
+ * @param {Request} req - The `ProviderVerifNotify` request
+ * @param {Response} res - The `VendorAck` response
+ * @param {string} id - The transaction ID related to the notification
+ */
 function handleFinishModifyNotification(req, res, id) {
     if (req.body.modification_status == 'ACCEPTED') {
         getProtocolState().tokens[id] = utils.base64ToObject(req.body.token, 'base64')
@@ -135,7 +140,10 @@ function handleFinishModifyNotification(req, res, id) {
     res.send({ success: true })
 }
 
-
+/**
+ * Handles unknown notification verb
+ * @param {Response} res - The `VendorAck` response
+ */
 function handleUnknownNotification(res) {
     res.send({
         success: false,
