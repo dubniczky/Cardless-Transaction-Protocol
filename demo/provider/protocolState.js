@@ -2,7 +2,7 @@ const protocolState = {
     ongoing: {
         transactions: {},
         challenges: {},
-        modifications: {}
+        modifications: []
     },
     tokens: {},
     tokenNotifyUrls: {}
@@ -52,6 +52,18 @@ function popOngoingChallenge(id) {
 }
 
 /**
+ * Returns the modification data with the given ID. The modification data is removed from the queue
+ * @param {string} id - The transaction ID associated with the modification data
+ * @returns {Object} The modification data
+ */
+function popOngoingModification(id) {
+    const modifIndex = protocolState.ongoing.modifications.findIndex((elem) => elem.id == id )
+    const modification = protocolState.ongoing.modifications[modifIndex]
+    protocolState.ongoing.modifications.splice(modifIndex, 1)
+    return modification
+}
+
+/**
  * Returns a list of all STP tokens
  * @returns {Object[]} The STP token
  */
@@ -69,5 +81,6 @@ function getToken(id) {
 }
 
 export default {
-    getProtocolState, getKeys, popOngoingTransaction, popOngoingChallenge, getAllTokensList, getToken
+    getProtocolState, getKeys, popOngoingTransaction, popOngoingChallenge, popOngoingModification,
+    getAllTokensList, getToken
 }

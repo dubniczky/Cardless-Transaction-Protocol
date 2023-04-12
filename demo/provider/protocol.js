@@ -2,6 +2,7 @@ import crypto from 'crypto'
 
 import utils from '../common/utils.js'
 import { getProtocolState, getKeys } from './protocolState.js'
+import validator from './validator.js'
 
 /**
  * Generates the `ProviderHello` message
@@ -98,6 +99,18 @@ async function handleUserInput(url, vendorToken, port) {
     return [ null, null ]
 }
 
+
+function generateProviderVerifChall(t_id, incommingChallenge, port) {
+    const challenge = utils.genChallenge(30)
+    getProtocolState().ongoing.challenges[t_id] = challenge
+    return {
+        success: true,
+        response: utils.signChall(incommingChallenge, getKeys().private),
+        challenge: challenge,
+        next_url: `stp://localhost:${port}/api/stp/change_next/${t_id}`
+    }
+}
+
 /**
  * Check whether the refreshed token is valid
  * @param {Object} oldToken - The previous token 
@@ -106,7 +119,7 @@ async function handleUserInput(url, vendorToken, port) {
  */
 function isRefreshedTokenValid(oldToken, newToken) {
     if (!oldToken.transaction.recurring || !newToken.transaction.recurring) {
-        return false;
+        return false
     }
 
     let oldTokenCopy = utils.copyObject(oldToken)
@@ -124,76 +137,140 @@ function isRefreshedTokenValid(oldToken, newToken) {
     return JSON.stringify(oldTokenCopy) == JSON.stringify(newTokenCopy)
 }
 
+
+function handleRevokeChange(res, id) {
+    delete getProtocolState().tokens[id]
+    delete getProtocolState().tokenNotifyUrls[id]
+    res.send({ success: true })
+}
+
+
+function handleRefreshChange(res, id, base64Token) {
+    const token = utils.base64ToObject(base64Token)
+    if (!utils.validateRes(res, isRefreshedTokenValid(getToken(id), token),
+            'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
+        !utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
+            'INCORRECT_TOKEN_SIGN', 'The refreshed token is not signed properly')) {
+        return
+    }
+
+    const fullToken = signToken(token)
+    getProtocolState().tokens[id] = fullToken
+    res.send({
+        success: true,
+        token: utils.objectToBase64(fullToken)
+    })
+}
+
+
+function handleModificationChange(res, id, base64Token, modificationData, instantlyAcceptModify) {
+    const token = utils.base64ToObject(base64Token)
+    if (!utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
+        'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
+        return
+    }
+
+    if (instantlyAcceptModify) {
+        const fullToken = signToken(token)
+        getProtocolState().tokens[id] = fullToken
+        res.send({
+            success: true,
+            modification_status: 'ACCEPTED',
+            token: utils.objectToBase64(fullToken)
+        })
+    } else {
+        getProtocolState().ongoing.modifications.push({
+            id: id,
+            modification: modificationData,
+            token: token,
+        })
+        res.send({
+            success: true,
+            modification_status: 'PENDING'
+        })
+    }
+}
+
+
+function handleUnknownChangeVerb(res) {
+    res.send({
+        success: false,
+        error_code: 'UNKNOWN_CHANGE_VERB',
+        error_message: 'Unsupported change_verb'
+    })
+}
+
+
+function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall, notify_verb, modificationData) {
+    if (!utils.verifyChallResponse(challenge, vendorVerifChall.response, getToken(transaction_id).signatures.vendor_key)) {
+        return {
+            success: false,
+            error_code: 'AUTH_FAILED',
+            error_message: 'The vendor\'s response to the challenge was not appropriate',
+        }
+    }
+
+    const providerVerifNotify = {
+        success: true,
+        response: utils.signChall(vendorVerifChall.challenge, getKeys().private),
+        notify_verb: notify_verb
+    }
+    if (notify_verb == 'FINISH_MODIFICATION') {
+        if (modificationData.accept) {
+            providerVerifNotify.modification_status = 'ACCEPTED'
+            const modifiedFullToken = signToken(modificationData.token)
+            providerVerifNotify.token = utils.objectToBase64(modifiedFullToken)
+        } else {
+            providerVerifNotify.modification_status = 'REJECTED'
+        }
+    }
+    return providerVerifNotify
+}
+
 /**
  * Make a notification for a given token
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
  * @param {string} notify_verb - The notification verb. Now implemented: REVOKE
- * @param {Object} tokens - Dictionary of all saved tokens. Key: `{string}` t_id, value: `{Object}` token
- * @param {Object} tokenNotifyUrls - Dictionary of all saved token notification URLs. Key: `{string}` t_id, value: `{string}` url
  * @param {Object?} modificationData - The modification data
  * @param {boolean} modificationData.accept - Whether the modification was accepted 
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function notify(transaction_id, notify_verb, tokens, tokenNotifyUrls, modificationData = null) {
+async function notify(transaction_id, notify_verb, modificationData = null) {
     const challenge = utils.genChallenge(30)
-    const vendorVerifChall = await utils.postStpRequest(tokenNotifyUrls[transaction_id], {
+    const vendorVerifChall = await utils.postStpRequest(protocolState.tokenNotifyUrls[transaction_id], {
         transaction_id: transaction_id,
         challenge: challenge
     })
     utils.logMsg('VendorVerifChall', vendorVerifChall)
-    if (vendorVerifChall.HTTP_error_code) {
-        return [ vendorVerifChall.HTTP_error_code, vendorVerifChall.HTTP_error_msg ]
+    let result = validator.checkVendorVerifChall(vendorVerifChall)
+    if (result) {
+        return result
     }
 
-    if (!vendorVerifChall.success) {
-        return [ vendorVerifChall.error_code, vendorVerifChall.error_message ]
-    }
-
-    let providerVerifNotify = {}
-    if (!utils.verifyChallResponse(challenge, vendorVerifChall.response, tokens[transaction_id].signatures.vendor_key)) {
-        providerVerifNotify = {
-            success: false,
-            error_code: 'AUTH_FAILED',
-            error_message: 'The vendor\'s response to the challenge was not appropriate',
-        }
-    } else {
-        providerVerifNotify = {
-            success: true,
-            response: utils.signChall(vendorVerifChall.challenge, getKeys().private),
-            notify_verb: notify_verb
-        }
-        if (notify_verb == 'FINISH_MODIFICATION') {
-            if (modificationData.accept) {
-                providerVerifNotify.modification_status = 'ACCEPTED'
-                const modifiedFullToken = signToken(modificationData.token)
-                providerVerifNotify.token = utils.objectToBase64(modifiedFullToken)
-            } else {
-                providerVerifNotify.modification_status = 'REJECTED'
-            }
-        }
-    }
+    const providerVerifNotify = generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall, notify_verb, modificationData)
     const vendorAck = await utils.postStpRequest(vendorVerifChall.next_url, providerVerifNotify)
     utils.logMsg('VendorAck', vendorAck)
-    if (vendorAck.HTTP_error_code) {
-        return [ vendorAck.HTTP_error_code, vendorAck.HTTP_error_msg ]
+    result = validator.checkVendorAck(vendorAck, providerVerifNotify)
+    if (result) {
+        return result
     }
     
-    if (!providerVerifNotify.success) {
-        return [ providerVerifNotify.error_code, providerVerifNotify.error_message ]
-    }
-    if (!vendorAck.success) {
-        return [ vendorAck.error_code, vendorAck.error_message ]
+    switch (notify_verb) {
+        case 'REVOKE':
+            delete protocolState.tokens[transaction_id]
+            delete protocolState.tokenNotifyUrls[transaction_id]
+            break
+        case 'FINISH_MODIFICATION':
+            protocolState.tokens[transaction_id] = signToken(modificationData.token)
+            break
     }
     
-    if (notify_verb == 'REVOKE') { 
-        delete tokens[transaction_id]
-        delete tokenNotifyUrls[transaction_id]
-    }
     return [ null, null ]
 }
 
 
 export default {
-    sendProviderHello, handleUserInput, isRefreshedTokenValid, notify
+    sendProviderHello, handleUserInput, generateProviderVerifChall, handleRevokeChange, handleRefreshChange,
+    handleModificationChange, handleUnknownChangeVerb, notify
 }

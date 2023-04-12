@@ -61,7 +61,33 @@ function checkProviderTokenMsg(req, res) {
 }
 
 
+function checkProviderVerifChall(providerVerifChall) {
+    if (providerVerifChall.HTTP_error_code) {
+        return [ providerVerifChall.HTTP_error_code, providerVerifChall.HTTP_error_msg ]
+    }
+    if (!providerVerifChall.success) {
+        return [ providerVerifChall.error_code, providerVerifChall.error_message ]
+    }
+
+    return null
+}
+
+
+function checkProviderAck(providerAck, vendorVerifChange) {
+    if (providerAck.HTTP_error_code) {
+        return [ providerAck.HTTP_error_code, providerAck.HTTP_error_msg ]
+    }
+    if (!vendorVerifChange.success) {
+        return [ vendorVerifChange.error_code, vendorVerifChange.error_message ]
+    }
+    if (!providerAck.success) {
+        return [ providerAck.error_code, providerAck.error_message ]
+    }
+
+    return null
+}
+
 export default {
     isOngoingRequest, isOngoingResponse, isOngoingChallenge, verifyUrlSignature, doesTokenExist, isTokenRecurring,
-    checkProviderVerifNotify, checkProviderTokenMsg
+    checkProviderVerifNotify, checkProviderTokenMsg, checkProviderVerifChall, checkProviderAck
 }

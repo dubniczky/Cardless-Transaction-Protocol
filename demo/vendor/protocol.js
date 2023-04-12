@@ -2,6 +2,7 @@ import crypto from 'crypto'
 
 import utils from '../common/utils.js'
 import {getProtocolState, getKeys} from './protocolState.js'
+import validator from './validator.js'
 
 /**
  * Convert recurring option to period (one_time -> null)
@@ -286,7 +287,7 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
 
 
 function generateVendorVerifChange(transaction_id, challenge, providerVerifChall, change_verb, modificationData) {
-    if (!utils.verifyChallResponse(challenge, providerVerifChall.response, getProtocolState().tokens[transaction_id].signatures.provider_key)) {
+    if (!utils.verifyChallResponse(challenge, providerVerifChall.response, getToken(transaction_id).signatures.provider_key)) {
         return {
             success: false,
             error_code: 'AUTH_FAILED',
@@ -338,29 +339,22 @@ function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
  */
 async function changeRequest(transaction_id, change_verb, modificationData = null) {
     const challenge = utils.genChallenge(30)
-    const providerVerifChall = await utils.postStpRequest(tokenChangeUrls[transaction_id], {
+    const providerVerifChall = await utils.postStpRequest(protocolState.tokenChangeUrls[transaction_id], {
         transaction_id: transaction_id,
         challenge: challenge
     })
     utils.logMsg('ProviderVerifChall', providerVerifChall)
-    if (providerVerifChall.HTTP_error_code) {
-        return [ providerVerifChall.HTTP_error_code, providerVerifChall.HTTP_error_msg ]
-    }
-    if (!providerVerifChall.success) {
-        return [ providerVerifChall.error_code, providerVerifChall.error_message ]
+    let result = validator.checkProviderVerifChall(providerVerifChall)
+    if (result) {
+        return result
     }
 
     const vendorVerifChange = generateVendorVerifChange(transaction_id, challenge, providerVerifChall, change_verb, modificationData)
     const providerAck = await utils.postStpRequest(providerVerifChall.next_url, vendorVerifChange)
     utils.logMsg('ProviderAck', providerAck)
-    if (providerAck.HTTP_error_code) {
-        return [ providerAck.HTTP_error_code, providerAck.HTTP_error_msg ]
-    }
-    if (!vendorVerifChange.success) {
-        return [ vendorVerifChange.error_code, vendorVerifChange.error_message ]
-    }
-    if (!providerAck.success) {
-        return [ providerAck.error_code, providerAck.error_message ]
+    result = validator.checkProviderAck(providerAck, vendorVerifChange)
+    if (result) {
+        return result
     }
     
     handleSuccessfulChange(transaction_id, providerAck, change_verb)
