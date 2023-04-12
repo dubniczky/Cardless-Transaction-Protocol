@@ -14,22 +14,6 @@ const keys = {
 }
 
 /**
- * Get the protocol's internal state
- * @returns {Object} The state
- */
-function getProtocolState() {
-    return protocolState
-}
-
-/**
- * Get the set of user keys
- * @returns {Object} The used keys. Contains: `private`, `public`, `bankPublic`
- */
-function getKeys() {
-    return keys
-}
-
-/**
  * Returns the tranaction object with the given ID. The object is removed from the queue
  * @param {string} id - The transaction's ID
  * @returns {Object} The tranaction object
@@ -81,6 +65,6 @@ function getToken(id) {
 }
 
 export default {
-    getProtocolState, getKeys, popOngoingTransaction, popOngoingChallenge, popOngoingModification,
-    getAllTokensList, getToken
+    protocolState, keys,
+    popOngoingTransaction, popOngoingChallenge, popOngoingModification, getAllTokensList, getToken
 }

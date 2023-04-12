@@ -16,22 +16,6 @@ const keys = {
 }
 
 /**
- * Get the protocol's internal state
- * @returns {Object} The state
- */
-function getProtocolState() {
-    return protocolState
-}
-
-/**
- * Get the set of user keys
- * @returns {Object} The used keys. Contains: `private`, `public`, `bankPublic`
- */
-function getKeys() {
-    return keys
-}
-
-/**
  * Returns the transaction request with the given UUID. The request is removed from the queue
  * @param {string} uuid - The UUID associated with the request
  * @returns {Object} The transaction request object
@@ -82,5 +66,6 @@ function getToken(id) {
 }
 
 export default {
-    getProtocolState, getKeys, popOngoingRequest, popOngoingRequestPin, popOngoingChallenge, getAllTokensList, getToken
+    protocolState, keys,
+    popOngoingRequest, popOngoingRequestPin, popOngoingChallenge, getAllTokensList, getToken
 }

@@ -1,19 +1,19 @@
-import { getProtocolState } from './protocolState'
+import { protocolState, getToken } from './protocolState.js'
 import utils from '../common/utils.js'
 
 
 function isOngoingTransaction(res, id) {
-    return utils.validateRes(res, id in getProtocolState().ongoing.transactions)
+    return utils.validateRes(res, id in protocolState.ongoing.transactions)
 }
 
 
 function isOngoingChallenge(res, id) {
-    return utils.validateRes(res, id in getProtocolState().ongoing.challenges)
+    return utils.validateRes(res, id in protocolState.ongoing.challenges)
 }
 
 
 function doesTokenExist(res, id) {
-    return utils.validateRes(res, id in getProtocolState().tokens,
+    return utils.validateRes(res, id in protocolState.tokens,
         'ID_NOT_FOUND', 'The given transaction_id has no associated tokens')
 }
 

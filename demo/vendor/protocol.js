@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 
 import utils from '../common/utils.js'
-import {getProtocolState, getKeys} from './protocolState.js'
+import { protocolState, keys, popOngoingRequest, popOngoingRequestPin, getToken } from './protocolState.js'
 import validator from './validator.js'
 
 /**
@@ -35,12 +35,12 @@ function recurringPeriodToOption(recurringPeriod) {
  */
 function generateNewTransactionUrl(req) {
     const uuid = crypto.randomUUID()
-    getProtocolState().ongoing.requests[uuid] = {
+    protocolStateprotocolState.ongoing.requests[uuid] = {
         amount: req.body.amount,
         currency: req.body.currency,
         period: recurringOptionToPeriod(req.body.recurring)
     }
-    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(getProtocolState().ongoing.requests[uuid])}\n`)
+    console.log(`Transaction data:\n${uuid}: ${JSON.stringify(protocolState.ongoing.requests[uuid])}\n`)
     return uuid
 }
 
@@ -52,10 +52,10 @@ function generateNewTransactionUrl(req) {
  * @param {number} port - The port of the vendor server 
  */
 function sendVendorTokenMsg(req, res, uuid, port) {
-    getProtocolState().ongoing.requestPins[uuid] = req.body.verification_pin
+    protocolState.ongoing.requestPins[uuid] = req.body.verification_pin
     const currReq = popOngoingRequest(uuid)
     const transId = crypto.randomUUID()
-    getProtocolState().ongoing.responses[transId] = true
+    protocolState.ongoing.responses[transId] = true
 
     const token = generateVendorToken(req.body, currReq, privkey, pubkey)
     const respMessage = generateVendorTokenMsg(transId, port, token, currReq)
@@ -69,12 +69,12 @@ function sendVendorTokenMsg(req, res, uuid, port) {
  * @returns {string} The PIN as a string
  */
 async function waitAndSendRequestPin(res, uuid) {
-    if (!(uuid in getProtocolState().ongoing.requests || uuid in getProtocolState().ongoing.requestPins)) {
+    if (!(uuid in protocolState.ongoing.requests || uuid in protocolState.ongoing.requestPins)) {
         res.sendStatus(400)
         return
     }
 
-    while (!(uuid in getProtocolState().ongoing.requestPins)) {
+    while (!(uuid in protocolState.ongoing.requestPins)) {
         await utils.sleep(100)
     }
 
@@ -90,10 +90,10 @@ async function waitAndSendRequestPin(res, uuid) {
  * @param {number} port - The port of the vendor server 
  */
 function sendVendorAck(req, res, uuid, port) {
-    delete getProtocolState().ongoing.responses[uuid]
+    delete protocolState.ongoing.responses[uuid]
     const token = utils.base64ToObject(req.body.token, 'base64')
-    getProtocolState().tokens[token.transaction.id] = token
-    getProtocolState().tokenChangeUrls[token.transaction.id] = req.body.change_url
+    protocolState.tokens[token.transaction.id] = token
+    protocolState.tokenChangeUrls[token.transaction.id] = req.body.change_url
     console.log('Transaction token:', token)
     res.send({
         success: true,
@@ -108,7 +108,7 @@ function sendVendorAck(req, res, uuid, port) {
  */
 function sendVendorVerifChall(req, res) {
     const challenge = utils.genChallenge(30)
-    getProtocolState().ongoing.challenges[req.body.transaction_id] = challenge
+    protocolState.ongoing.challenges[req.body.transaction_id] = challenge
     res.send({
         success: true,
         response: utils.signChall(req.body.challenge, keys.private),
@@ -123,8 +123,8 @@ function sendVendorVerifChall(req, res) {
  * @param {string} id - The transaction ID related to the notification
  */
 function handleRevokeNotification(res, id) {
-    delete getProtocolState().tokens[id]
-    delete getProtocolState().tokenChangeUrls[id]
+    delete protocolState.tokens[id]
+    delete protocolState.tokenChangeUrls[id]
     res.send({ success: true })
 }
 
@@ -136,7 +136,7 @@ function handleRevokeNotification(res, id) {
  */
 function handleFinishModifyNotification(req, res, id) {
     if (req.body.modification_status == 'ACCEPTED') {
-        getProtocolState().tokens[id] = utils.base64ToObject(req.body.token, 'base64')
+        protocolState.tokens[id] = utils.base64ToObject(req.body.token, 'base64')
     }
     res.send({ success: true })
 }
@@ -171,10 +171,10 @@ function constructAndSignToken(transaction) {
 
     let signer = crypto.createSign('SHA512')
     signer.update(Buffer.from(JSON.stringify(token)))
-    const signature = signer.sign(getKeys().private)
+    const signature = signer.sign(keys.private)
     token.signatures = {
         vendor: signature.toString('base64'),
-        vendor_key: utils.pemKeyToRawKeyStr(getKeys().public)
+        vendor_key: utils.pemKeyToRawKeyStr(keys.public)
     }
 
     return token
@@ -297,10 +297,10 @@ function generateVendorVerifChange(transaction_id, challenge, providerVerifChall
 
     const vendorVerifChange = {
         success: true,
-        response: utils.signChall(providerVerifChall.challenge, getKeys().private),
+        response: utils.signChall(providerVerifChall.challenge, keys.private),
         change_verb: change_verb
     }
-    const token = getProtocolState().tokens[transaction_id]
+    const token = getToken(transaction_id)
     switch (change_verb) {
         case 'REFRESH':
             vendorVerifChange.token = utils.objectToBase64(generateRefreshedToken(token))
@@ -315,13 +315,13 @@ function generateVendorVerifChange(transaction_id, challenge, providerVerifChall
 
 function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
     if (change_verb == 'REFRESH') {
-        getProtocolState().tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
+        protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
     } else if (change_verb == 'REVOKE') {
-        delete getProtocolState().tokens[transaction_id]
-        delete getProtocolState().tokenChangeUrls[transaction_id]
+        delete protocolState.tokens[transaction_id]
+        delete protocolState.tokenChangeUrls[transaction_id]
     } else if (change_verb == 'MODIFY') { 
         if (providerAck.modification_status == 'ACCEPTED') {
-            getProtocolState().tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
+            protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
         }
     }
 }

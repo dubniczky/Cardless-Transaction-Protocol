@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import validator from './validator.js'
 import protocol from './protocol.js'
-import protocolState from './protocolState.js'
+import { getAllTokensList, getToken }  from './protocolState.js'
 
 
 const app = express()
@@ -98,7 +98,7 @@ app.post('/api/stp/notify_next/:id', async (req, res) => {
 
 
 app.get('/tokens', async (req, res) => {
-    res.send(protocolState.getAllTokensList())
+    res.send(getAllTokensList())
 })
 
 
@@ -106,7 +106,7 @@ app.get('/token/:id', async (req, res) => {
     const id = req.params.id
     res.render('token', {
         id: id,
-        token: utils.formatJSON(protocolState.getToken(id))
+        token: utils.formatJSON(getToken(id))
     })
 })
 
@@ -151,7 +151,7 @@ app.get('/modify/:id', async (req, res) => {
     if (!validator.doesTokenExist(res, id)) {
         return
     }
-    const token = protocolState.getToken(id)
+    const token = getToken(id)
     return res.render('modify', {
         id: id,
         amount: token.transaction.amount,

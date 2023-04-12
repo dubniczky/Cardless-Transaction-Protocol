@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import protocol from './protocol.js'
 import validator from './validator.js'
-import protocolState from './protocolState.js'
+import { popOngoingTransaction, popOngoingModification, getAllTokensList, getToken } from './protocolState.js'
 
 
 const app = express()
@@ -65,7 +65,7 @@ app.post('/verify', async (req, res) => {
     }
 
     return res.render('result', {
-        token: utils.formatJSON(protocolState.getToken(req.body.t_id))
+        token: utils.formatJSON(getToken(req.body.t_id))
     })
 })
 
@@ -96,8 +96,8 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         return
     }
 
-    const challenge = protocolState.popChallenge(id)
-    if (!validator.checkCendorVerifChange(req, res, id, challenge)) {
+    const challenge = popChallenge(id)
+    if (!validator.checkVendorVerifChange(req, res, id, challenge)) {
         return
     }
 
@@ -118,7 +118,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
 
 
 app.get('/tokens', async (req, res) => {
-    return res.send(protocolState.getAllTokensList())
+    return res.send(getAllTokensList())
 })
 
 
@@ -126,7 +126,7 @@ app.get('/token/:id', async (req, res) => {
     const id = req.params.id
     return res.render('token', {
         id: id,
-        token: utils.formatJSON(protocolState.getToken(id))
+        token: utils.formatJSON(getToken(id))
     })
 })
 

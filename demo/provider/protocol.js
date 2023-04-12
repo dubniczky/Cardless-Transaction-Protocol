@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 
 import utils from '../common/utils.js'
-import { getProtocolState, getKeys } from './protocolState.js'
+import { protocolState, keys,  getToken } from './protocolState.js'
 import validator from './validator.js'
 
 /**
@@ -13,7 +13,7 @@ function generateProviderHelloMsg(url) {
     const pin = crypto.randomInt(1000, 10000)
     const t_id = 'STPEXPROV_' + crypto.randomInt(10 ** 9, 10 ** 10)
     const url_token = utils.cutIdFromUrl(url)
-    const url_signature = crypto.sign(null, Buffer.from(url_token), getKeys().private).toString('base64')
+    const url_signature = crypto.sign(null, Buffer.from(url_token), keys.private).toString('base64')
     return {
         version: 'v1',
         bank_name: 'STP_Example_Provider',
@@ -42,7 +42,7 @@ async function sendProviderHello(url) {
         return [ null, vendorToken.error_code, vendorToken.error_message ]
     }
 
-    getProtocolState().ongoing.transactions[providerHello.transaction_id] = {
+    protocolState.ongoing.transactions[providerHello.transaction_id] = {
         token: vendorToken.token,
         response_url: vendorToken.response_url,
         pin: providerHello.verification_pin
@@ -59,11 +59,11 @@ async function sendProviderHello(url) {
 function signToken(token) {
     let signer = crypto.createSign('SHA512')
     signer.update(Buffer.from(JSON.stringify(token)))
-    const signature = signer.sign(getKeys().private)
+    const signature = signer.sign(keys.private)
 
     let signedToken = utils.copyObject(token)
     signedToken.signatures.provider = signature.toString('base64')
-    signedToken.signatures.provider_key = utils.pemKeyToRawKeyStr(getKeys().public)
+    signedToken.signatures.provider_key = utils.pemKeyToRawKeyStr(keys.public)
     return signedToken
 }
 
@@ -94,18 +94,18 @@ async function handleUserInput(url, vendorToken, port) {
         return [ vendorAck.error_code, vendorAck.error_message ]
     }
 
-    getProtocolState().tokens[token.transaction.id] = token
-    getProtocolState().tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
+    protocolState.tokens[token.transaction.id] = token
+    protocolState.tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
     return [ null, null ]
 }
 
 
 function generateProviderVerifChall(t_id, incommingChallenge, port) {
     const challenge = utils.genChallenge(30)
-    getProtocolState().ongoing.challenges[t_id] = challenge
+    protocolState.ongoing.challenges[t_id] = challenge
     return {
         success: true,
-        response: utils.signChall(incommingChallenge, getKeys().private),
+        response: utils.signChall(incommingChallenge, keys.private),
         challenge: challenge,
         next_url: `stp://localhost:${port}/api/stp/change_next/${t_id}`
     }
@@ -139,8 +139,8 @@ function isRefreshedTokenValid(oldToken, newToken) {
 
 
 function handleRevokeChange(res, id) {
-    delete getProtocolState().tokens[id]
-    delete getProtocolState().tokenNotifyUrls[id]
+    delete protocolState.tokens[id]
+    delete protocolState.tokenNotifyUrls[id]
     res.send({ success: true })
 }
 
@@ -155,7 +155,7 @@ function handleRefreshChange(res, id, base64Token) {
     }
 
     const fullToken = signToken(token)
-    getProtocolState().tokens[id] = fullToken
+    protocolState.tokens[id] = fullToken
     res.send({
         success: true,
         token: utils.objectToBase64(fullToken)
@@ -172,14 +172,14 @@ function handleModificationChange(res, id, base64Token, modificationData, instan
 
     if (instantlyAcceptModify) {
         const fullToken = signToken(token)
-        getProtocolState().tokens[id] = fullToken
+        protocolState.tokens[id] = fullToken
         res.send({
             success: true,
             modification_status: 'ACCEPTED',
             token: utils.objectToBase64(fullToken)
         })
     } else {
-        getProtocolState().ongoing.modifications.push({
+        protocolState.ongoing.modifications.push({
             id: id,
             modification: modificationData,
             token: token,
@@ -212,7 +212,7 @@ function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall
 
     const providerVerifNotify = {
         success: true,
-        response: utils.signChall(vendorVerifChall.challenge, getKeys().private),
+        response: utils.signChall(vendorVerifChall.challenge, keys.private),
         notify_verb: notify_verb
     }
     if (notify_verb == 'FINISH_MODIFICATION') {
@@ -265,7 +265,7 @@ async function notify(transaction_id, notify_verb, modificationData = null) {
             protocolState.tokens[transaction_id] = signToken(modificationData.token)
             break
     }
-    
+
     return [ null, null ]
 }
 
