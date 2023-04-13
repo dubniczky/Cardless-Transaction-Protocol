@@ -35,12 +35,12 @@ app.post('/start', async (req, res) => {
     }
     
     return res.render('details', {
-        vendor_name: vendor_res?.vendor?.name,
-        vendor_address: vendor_res?.vendor?.address,
-        amount: vendor_res?.transaction?.amount,
-        currency: vendor_res?.transaction?.currency_code,
-        recurrance: vendor_res?.transaction?.recurrance,
-        t_id: providerHello.transaction_id
+        vendor_name: vendorToken?.vendor?.name,
+        vendor_address: vendorToken?.vendor?.address,
+        amount: vendorToken?.transaction?.amount,
+        currency: vendorToken?.transaction?.currency_code,
+        recurrance: vendorToken?.transaction?.recurrance,
+        t_id: utils.base64ToObject(vendorToken.token).transaction.id
     })
 })
 
@@ -51,8 +51,8 @@ app.post('/verify', async (req, res) => {
     }
 
     const transaction = popOngoingTransaction(req.body.t_id)
-    const vendorToken = utils.base64ToObject(transaction.token, 'base64')
-    if (!validator.checkUserInput(req, res, vendorToken)) {
+    const vendorToken = utils.base64ToObject(transaction.token)
+    if (!validator.checkUserInput(req, res, transaction, vendorToken)) {
         return
     }
 
@@ -149,8 +149,9 @@ app.get('/revoke/:id', async (req, res) => {
 
 
 app.get('/ongoing_modification', async (req, res) => {
-    if (ongoingModifications.length != 0) {
-        return res.send(ongoingModifications[ongoingModifications.length - 1])
+    const modification = popOngoingModification()
+    if (modification) {
+        return res.send(modification)
     }
     return res.send({ not_found: true })
 })

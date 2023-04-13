@@ -135,7 +135,7 @@ function formatJSON(obj) {
  * @returns {Object} The JS object
  */
 function base64ToObject(base64) {
-    return JSON.parse(Buffer.from(req.body.token, 'base64'))
+    return JSON.parse(Buffer.from(base64, 'base64'))
 }
 
 /**
@@ -177,14 +177,14 @@ async function postStpRequest(stpUrl, message) {
  * @returns {boolean} The result of the verification
  */
 function verifyProviderSignatureOfToken(token) {
-    let tokenCopy = utils.copyObject(token)
+    let tokenCopy = copyObject(token)
     delete tokenCopy.signatures.provider
     delete tokenCopy.signatures.provider_key
 
     let verifier = crypto.createVerify('SHA512')
     verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
     return verifier.verify(
-        utils.rawKeyStrToPemPubKey(token.signatures.provider_key),
+        rawKeyStrToPemPubKey(token.signatures.provider_key),
         Buffer.from(token.signatures.provider, 'base64')
     )
 }
@@ -195,13 +195,13 @@ function verifyProviderSignatureOfToken(token) {
  * @returns {boolean} The result of the verification
  */
 function verifyVendorSignatureOfToken(token) {
-    let tokenCopy = utils.copyObject(token)
+    let tokenCopy = copyObject(token)
     delete tokenCopy.signatures
 
     let verifier = crypto.createVerify('SHA512')
     verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
     return verifier.verify(
-        commonUtils.rawKeyStrToPemPubKey(token.signatures.vendor_key),
+        rawKeyStrToPemPubKey(token.signatures.vendor_key),
         Buffer.from(token.signatures.vendor, 'base64')
     )
 }

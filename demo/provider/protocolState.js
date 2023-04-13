@@ -1,4 +1,7 @@
-const protocolState = {
+import fs from 'fs'
+
+
+export const protocolState = {
     ongoing: {
         transactions: {},
         challenges: {},
@@ -8,7 +11,7 @@ const protocolState = {
     tokenNotifyUrls: {}
 }
 
-const keys = {
+export const keys = {
     private: fs.readFileSync('../keys/bank_privkey.pem'),
     public: fs.readFileSync('../keys/bank_pubkey.pem')
 }
@@ -18,7 +21,7 @@ const keys = {
  * @param {string} id - The transaction's ID
  * @returns {Object} The tranaction object
  */
-function popOngoingTransaction(id) {
+export function popOngoingTransaction(id) {
     const transaction = protocolState.ongoing.transactions[id]
     delete protocolState.ongoing.transactions[id]
     return transaction
@@ -29,7 +32,7 @@ function popOngoingTransaction(id) {
  * @param {string} id - The transaction ID associated with the challenge
  * @returns {string} The challenge as a base64 string
  */
-function popOngoingChallenge(id) {
+export function popOngoingChallenge(id) {
     const challenge = protocolState.ongoing.challenges[id]
     delete protocolState.ongoing.challenges[id]
     return challenge
@@ -37,21 +40,33 @@ function popOngoingChallenge(id) {
 
 /**
  * Returns the modification data with the given ID. The modification data is removed from the queue
- * @param {string} id - The transaction ID associated with the modification data
- * @returns {Object} The modification data
+ * @param {string?} id - The transaction ID associated with the modification data. If not given, the last modification is popped
+ * @returns {Object?} The modification data. `null` if none found
  */
-function popOngoingModification(id) {
-    const modifIndex = protocolState.ongoing.modifications.findIndex((elem) => elem.id == id )
-    const modification = protocolState.ongoing.modifications[modifIndex]
-    protocolState.ongoing.modifications.splice(modifIndex, 1)
-    return modification
+export function popOngoingModification(id = null) {
+    if (id) {
+        const modifIndex = protocolState.ongoing.modifications.findIndex((elem) => elem.id == id)
+        if (modifIndex === -1) {
+            return null
+        }
+
+        const modification = protocolState.ongoing.modifications[modifIndex]
+        protocolState.ongoing.modifications.splice(modifIndex, 1)
+        return modification
+    }
+
+    if (protocolState.ongoing.modifications.length == 0) {
+        return null
+    }
+
+    return protocolState.ongoing.modifications[protocolState.ongoing.modifications.length - 1]
 }
 
 /**
  * Returns a list of all STP tokens
  * @returns {Object[]} The STP token
  */
-function getAllTokensList() {
+export function getAllTokensList() {
     return Object.values(protocolState.tokens)
 }
 
@@ -60,11 +75,6 @@ function getAllTokensList() {
  * @param {string} id - The transaction ID associated with the token
  * @returns {Object} The STP token
  */
-function getToken(id) {
+export function getToken(id) {
     return protocolState.tokens[id]
-}
-
-export default {
-    protocolState, keys,
-    popOngoingTransaction, popOngoingChallenge, popOngoingModification, getAllTokensList, getToken
 }

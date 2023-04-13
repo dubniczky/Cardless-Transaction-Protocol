@@ -47,7 +47,7 @@ async function sendProviderHello(url) {
         response_url: vendorToken.response_url,
         pin: providerHello.verification_pin
     }
-    return [ vendor_res, null, null ]
+    return [ vendorToken, null, null ]
 }
 
 
@@ -75,10 +75,10 @@ function signToken(token) {
  * @returns {[string?, string?]} `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function handleUserInput(url, vendorToken, port) {
-    const token = providerUtils.signToken(vendorToken)
+    const token = signToken(vendorToken)
     const providerTokenMsg = {
         allowed: true,
-        token: utils.base64ToObject(token),
+        token: utils.objectToBase64(token),
         change_url: `stp://localhost:${port}/api/stp/change`
     }
 

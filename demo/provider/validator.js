@@ -18,7 +18,7 @@ function doesTokenExist(res, id) {
 }
 
 
-function checkUserInput(req, res, vendorToken) {
+function checkUserInput(req, res, transaction, vendorToken) {
     if (!utils.validateRes(res, req.body.decision === 'accept', 'USER_DECLINED', 'The user declined the transaction', 'allowed')) {
         return false
     }

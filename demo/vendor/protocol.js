@@ -1,8 +1,8 @@
 import crypto from 'crypto'
 
 import utils from '../common/utils.js'
-import { protocolState, keys, popOngoingRequest, popOngoingRequestPin, getToken } from './protocolState.js'
 import validator from './validator.js'
+import { protocolState, keys, popOngoingRequest, popOngoingRequestPin, getToken } from './protocolState.js'
 
 /**
  * Convert recurring option to period (one_time -> null)
@@ -35,7 +35,7 @@ function recurringPeriodToOption(recurringPeriod) {
  */
 function generateNewTransactionUrl(req) {
     const uuid = crypto.randomUUID()
-    protocolStateprotocolState.ongoing.requests[uuid] = {
+    protocolState.ongoing.requests[uuid] = {
         amount: req.body.amount,
         currency: req.body.currency,
         period: recurringOptionToPeriod(req.body.recurring)
@@ -57,7 +57,7 @@ function sendVendorTokenMsg(req, res, uuid, port) {
     const transId = crypto.randomUUID()
     protocolState.ongoing.responses[transId] = true
 
-    const token = generateVendorToken(req.body, currReq, privkey, pubkey)
+    const token = generateVendorToken(req.body, currReq)
     const respMessage = generateVendorTokenMsg(transId, port, token, currReq)
     res.send(respMessage)
 }
@@ -79,7 +79,7 @@ async function waitAndSendRequestPin(res, uuid) {
     }
 
     const pin = popOngoingRequestPin(uuid)
-    res.send(pin)
+    res.send(pin.toString())
 }
 
 /**
@@ -91,7 +91,7 @@ async function waitAndSendRequestPin(res, uuid) {
  */
 function sendVendorAck(req, res, uuid, port) {
     delete protocolState.ongoing.responses[uuid]
-    const token = utils.base64ToObject(req.body.token, 'base64')
+    const token = utils.base64ToObject(req.body.token)
     protocolState.tokens[token.transaction.id] = token
     protocolState.tokenChangeUrls[token.transaction.id] = req.body.change_url
     console.log('Transaction token:', token)
@@ -136,7 +136,7 @@ function handleRevokeNotification(res, id) {
  */
 function handleFinishModifyNotification(req, res, id) {
     if (req.body.modification_status == 'ACCEPTED') {
-        protocolState.tokens[id] = utils.base64ToObject(req.body.token, 'base64')
+        protocolState.tokens[id] = utils.base64ToObject(req.body.token)
     }
     res.send({ success: true })
 }
@@ -315,13 +315,13 @@ function generateVendorVerifChange(transaction_id, challenge, providerVerifChall
 
 function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
     if (change_verb == 'REFRESH') {
-        protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
+        protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token)
     } else if (change_verb == 'REVOKE') {
         delete protocolState.tokens[transaction_id]
         delete protocolState.tokenChangeUrls[transaction_id]
     } else if (change_verb == 'MODIFY') { 
         if (providerAck.modification_status == 'ACCEPTED') {
-            protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token, 'base64')
+            protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token)
         }
     }
 }

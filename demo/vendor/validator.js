@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 import { protocolState, keys } from './protocolState.js'
 import utils from '../common/utils.js'
 
@@ -55,7 +57,7 @@ function checkProviderTokenMsg(req, res) {
         return false
     }
 
-    const token = utils.base64ToObject(req.body.token, 'base64')
+    const token = utils.base64ToObject(req.body.token)
     return utils.validateRes(res, utils.verifyProviderSignatureOfToken(token),
         'TOKEN_INVALID', 'The transaction token has an invalid provider signature')
 }
