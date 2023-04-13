@@ -105,6 +105,7 @@ function sendVendorAck(req, res, uuid, port) {
  * Responds to the `ProviderChall` with the `VendorVerifChall`
  * @param {Request} req - The `ProviderChall` request
  * @param {Response} res - The `VendorVerifChall` response
+ * @param {number} port - The port of the vendor server 
  */
 function sendVendorVerifChall(req, res, port) {
     const challenge = utils.genChallenge(30)
@@ -285,7 +286,18 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
     }
 }
 
-
+/**
+ * Generates the `VendorVerifChange` message
+ * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
+ * @param {string} challenge - The vendor's challenge (which is signed is the `ProviderVerifChall` message) as a base64 string
+ * @param {Object} providerVerifChall - The `ProviderVerifChall` message
+ * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE
+ * @param {Object?} modificationData - The modification data
+ * @param {number} modificationData.amount - The amount of the modification 
+ * @param {string} modificationData.currency - The currency code of the modification
+ * @param {string?} modificationData.period - The recurrance period of the modification. One of: null, monthly, quarterly, annual
+ * @returns {Object} The `VendorVerifChange` message
+ */
 function generateVendorVerifChange(transaction_id, challenge, providerVerifChall, change_verb, modificationData) {
     if (!utils.verifyChallResponse(challenge, providerVerifChall.response, getToken(transaction_id).signatures.provider_key)) {
         return {
@@ -312,7 +324,12 @@ function generateVendorVerifChange(transaction_id, challenge, providerVerifChall
     return vendorVerifChange
 }
 
-
+/**
+ * Handles a successful change request. Should be called after all checks were made
+ * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
+ * @param {Object} providerAck - The `ProviderAck` message
+ * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE
+ */
 function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
     if (change_verb == 'REFRESH') {
         protocolState.tokens[transaction_id] = utils.base64ToObject(providerAck.token)
