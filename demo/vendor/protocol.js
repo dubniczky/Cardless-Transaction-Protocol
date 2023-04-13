@@ -106,7 +106,7 @@ function sendVendorAck(req, res, uuid, port) {
  * @param {Request} req - The `ProviderChall` request
  * @param {Response} res - The `VendorVerifChall` response
  */
-function sendVendorVerifChall(req, res) {
+function sendVendorVerifChall(req, res, port) {
     const challenge = utils.genChallenge(30)
     protocolState.ongoing.challenges[req.body.transaction_id] = challenge
     res.send({

@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import validator from './validator.js'
 import protocol from './protocol.js'
-import { getAllTokensList, getToken }  from './protocolState.js'
+import { getAllTokensList, getToken, popOngoingChallenge }  from './protocolState.js'
 
 
 const app = express()
@@ -68,7 +68,7 @@ app.post('/api/stp/notify', async (req, res) => {
         return
     }
 
-    protocol.sendVendorVerifChall(req, res)
+    protocol.sendVendorVerifChall(req, res, port)
 })
 
 
@@ -79,8 +79,8 @@ app.post('/api/stp/notify_next/:id', async (req, res) => {
         return
     }
 
-    const challenge = protocol.popOngoingChallenge(id)
-    if (!validator.checkProviderVerifNotify(req, res, is, challenge)) {
+    const challenge = popOngoingChallenge(id)
+    if (!validator.checkProviderVerifNotify(req, res, id, challenge)) {
         return
     }
 

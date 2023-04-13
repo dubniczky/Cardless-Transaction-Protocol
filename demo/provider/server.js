@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import protocol from './protocol.js'
 import validator from './validator.js'
-import { popOngoingTransaction, popOngoingModification, getAllTokensList, getToken } from './protocolState.js'
+import { popOngoingTransaction, popOngoingModification, popOngoingChallenge, getAllTokensList, getToken } from './protocolState.js'
 
 
 const app = express()
@@ -96,7 +96,7 @@ app.post('/api/stp/change_next/:id', async (req, res) => {
         return
     }
 
-    const challenge = popChallenge(id)
+    const challenge = popOngoingChallenge(id)
     if (!validator.checkVendorVerifChange(req, res, id, challenge)) {
         return
     }

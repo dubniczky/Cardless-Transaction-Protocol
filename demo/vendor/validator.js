@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-import { protocolState, keys } from './protocolState.js'
+import { protocolState, keys, getToken } from './protocolState.js'
 import utils from '../common/utils.js'
 
 
