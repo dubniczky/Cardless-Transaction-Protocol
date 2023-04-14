@@ -117,7 +117,7 @@ function cutIdFromUrl(url) {
  * @param {number} ms - amount of milliseconds to sleep
  */
 async function sleep(ms) {
-    await new Promise(r => setTimeout(r, 100))
+    await new Promise(r => setTimeout(r, ms))
 }
 
 /**

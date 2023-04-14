@@ -99,7 +99,13 @@ async function handleUserInput(url, vendorToken, port) {
     return [ null, null ]
 }
 
-
+/**
+ * Generates `ProviderVerifChall` message
+ * @param {string} t_id - The transaction ID related to the change request
+ * @param {string} incommingChallenge - The challenge from the `VendorChall` message as a base64 string
+ * @param {number} port - The port of the provider server 
+ * @returns {Object} The `ProviderVerifChall` message
+ */
 function generateProviderVerifChall(t_id, incommingChallenge, port) {
     const challenge = utils.genChallenge(30)
     protocolState.ongoing.challenges[t_id] = challenge
@@ -137,14 +143,23 @@ function isRefreshedTokenValid(oldToken, newToken) {
     return JSON.stringify(oldTokenCopy) == JSON.stringify(newTokenCopy)
 }
 
-
+/**
+ * Handles successful revoke change request
+ * @param {Response} res - The `ProviderAck` response 
+ * @param {string} id - The transaction ID related to the change request
+ */
 function handleRevokeChange(res, id) {
     delete protocolState.tokens[id]
     delete protocolState.tokenNotifyUrls[id]
     res.send({ success: true })
 }
 
-
+/**
+ * Handles successful refresh change request
+ * @param {Response} res - The `ProviderAck` response 
+ * @param {string} id - The transaction ID related to the change request
+ * @param {string} base64Token - The refreshed vendor STP token as a base64 string
+ */
 function handleRefreshChange(res, id, base64Token) {
     const token = utils.base64ToObject(base64Token)
     if (!utils.validateRes(res, isRefreshedTokenValid(getToken(id), token),
@@ -162,7 +177,16 @@ function handleRefreshChange(res, id, base64Token) {
     })
 }
 
-
+/**
+ * Handles successful modification change request
+ * @param {Response} res - The `ProviderAck` response 
+ * @param {string} id - The transaction ID related to the change request
+ * @param {string} base64Token - The refreshed vendor STP token as a base64 string
+ * @param {Object?} modificationData - The modification data
+ * @param {boolean} modificationData.accept - Whether the modification was accepted 
+ * @param {Object} modificationData.token - The modified JWT token signed by the vendor
+ * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
+ */
 function handleModificationChange(res, id, base64Token, modificationData, instantlyAcceptModify) {
     const token = utils.base64ToObject(base64Token)
     if (!utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
@@ -191,7 +215,10 @@ function handleModificationChange(res, id, base64Token, modificationData, instan
     }
 }
 
-
+/**
+ * Handles unknown change verb
+ * @param {Response} res - The `ProviderAck` response
+ */
 function handleUnknownChangeVerb(res) {
     res.send({
         success: false,
@@ -200,7 +227,17 @@ function handleUnknownChangeVerb(res) {
     })
 }
 
-
+/**
+ * Generates `ProviderVerifNotify` message
+ * @param {string} transaction_id - The transaction ID related to the notification
+ * @param {string} challenge - The challenge (that was signed in the `VendorVerifChall` message) as a base64 string
+ * @param {Object} vendorVerifChall - The `VendorVerifChall` message
+ * @param {string} notify_verb - The notification verb. Now implemented: REVOKE, FINISH_MODIFICATION
+ * @param {Object?} modificationData - The modification data
+ * @param {boolean} modificationData.accept - Whether the modification was accepted 
+ * @param {Object} modificationData.token - The modified JWT token signed by the vendor
+ * @returns 
+ */
 function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall, notify_verb, modificationData) {
     if (!utils.verifyChallResponse(challenge, vendorVerifChall.response, getToken(transaction_id).signatures.vendor_key)) {
         return {
@@ -230,7 +267,7 @@ function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall
 /**
  * Make a notification for a given token
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
- * @param {string} notify_verb - The notification verb. Now implemented: REVOKE
+ * @param {string} notify_verb - The notification verb. Now implemented: REVOKE, FINISH_MODIFICATION
  * @param {Object?} modificationData - The modification data
  * @param {boolean} modificationData.accept - Whether the modification was accepted 
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor

@@ -291,7 +291,7 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
  * @param {string} challenge - The vendor's challenge (which is signed is the `ProviderVerifChall` message) as a base64 string
  * @param {Object} providerVerifChall - The `ProviderVerifChall` message
- * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE
+ * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE, MODIFY
  * @param {Object?} modificationData - The modification data
  * @param {number} modificationData.amount - The amount of the modification 
  * @param {string} modificationData.currency - The currency code of the modification
@@ -328,7 +328,7 @@ function generateVendorVerifChange(transaction_id, challenge, providerVerifChall
  * Handles a successful change request. Should be called after all checks were made
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
  * @param {Object} providerAck - The `ProviderAck` message
- * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE
+ * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE, MODIFY
  */
 function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
     if (change_verb == 'REFRESH') {
@@ -347,7 +347,7 @@ function handleSuccessfulChange(transaction_id, providerAck, change_verb) {
 /**
  * Make a change request for a given token
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
- * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE
+ * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE, MODIFY
  * @param {Object?} modificationData - The modification data
  * @param {number} modificationData.amount - The amount of the modification 
  * @param {string} modificationData.currency - The currency code of the modification
