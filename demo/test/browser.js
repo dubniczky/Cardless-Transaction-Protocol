@@ -1,4 +1,4 @@
-import { Builder, By, Key } from 'selenium-webdriver'
+import { Builder, By, Key, until } from 'selenium-webdriver'
 
 
 let driver = null
@@ -22,11 +22,22 @@ async function close() {
 }
 
 
+async function clearInput(inputElem) {
+    await driver.executeScript(elem => elem.select(), inputElem);
+    await inputElem.sendKeys(Key.BACK_SPACE);
+}
+
+
+async function selectOption(select, optionValue) {
+    await select.click()
+    await select.findElement(By.css(`option[value="${optionValue}"]`)).click()
+}
+
+
 async function startVendorTransaction(vendorTab, amount, currency, recurring = 'one_time') {
     await driver.switchTo().window(vendorTab)
     await driver.findElement(By.id('amount')).sendKeys(amount)
-    await driver.findElement(By.id('recurring')).click()
-    await driver.findElement(By.id('recurring')).findElement(By.css(`option[value="${recurring}"]`)).click()
+    await selectOption(await driver.findElement(By.id('recurring')), recurring)
     await driver.findElement(By.id('currency')).sendKeys(currency, Key.RETURN)
 
     return await driver.findElement(By.xpath('//p/b[contains(text(), "stp://")]')).getText()
@@ -70,7 +81,45 @@ async function getDisplayedToken(tab) {
 
 async function startTokenAction(tab, transactionId, action) {
     await driver.switchTo().window(tab)
+    await driver.navigate().refresh()
     await driver.findElement(By.xpath(`//a[contains(@href, "${transactionId}") and contains(text(), "${action}")]`)).click()
+}
+
+
+async function getListOfTokens(tab) {
+    await driver.switchTo().window(tab)
+    await driver.navigate().refresh()
+    const listElems = await driver.findElement(By.id('tokens')).findElements(By.xpath('//li'))
+    const tokens = []
+    for (const listElem of listElems) {
+        tokens.push(await listElem.findElement(By.xpath('//b')).getText())
+    }
+    return tokens
+}
+
+
+async function startModificationRequest(vendorTab, amount, currency, recurring = 'one_time') {
+    await driver.switchTo().window(vendorTab)
+    await clearInput(await driver.findElement(By.id('amount')))
+    await clearInput(await driver.findElement(By.id('currency')))
+
+    await driver.findElement(By.id('amount')).sendKeys(amount)
+    await selectOption(await driver.findElement(By.id('recurring')), recurring)
+    await driver.findElement(By.id('currency')).sendKeys(currency, Key.RETURN)
+}
+
+
+async function toggleInstantAccept(providerTab) {
+    await driver.switchTo().window(providerTab)
+    await driver.findElement(By.id('accept_modify')).click()
+}
+
+
+async function acceptConfirmAlert(providerTab) {
+    await driver.switchTo().window(providerTab)
+    await driver.wait(until.alertIsPresent())
+    const alert = await driver.switchTo().alert()
+    await alert.accept()
 }
 
 
@@ -93,6 +142,6 @@ async function negotiateToken(vendorTab, providerTab, amount, currency, recurrin
 export default {
     openTabs, close,
     startVendorTransaction, getPinFromVendor, startProviderTransaction, acceptTransaction, backToMainPage, getDisplayedToken,
-    startTokenAction,
+    startTokenAction, getListOfTokens, startModificationRequest, toggleInstantAccept, acceptConfirmAlert,
     negotiateToken
 }
