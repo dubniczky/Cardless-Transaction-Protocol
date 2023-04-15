@@ -5,14 +5,14 @@
   "main": "test.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node test.js"
+    "test": "mocha --no-timeouts 'test.js'"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "assert": "^2.0.0",
+    "mocha": "^10.2.0",
     "selenium-webdriver": "^4.8.2"
   }
 }

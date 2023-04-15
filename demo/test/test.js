@@ -1,66 +1,32 @@
-import { Builder, By, Key } from 'selenium-webdriver'
 import assert from 'assert'
+import browser from './browser.js'
+import { test } from './testenv.js'
 
 
-const driver = await new Builder().forBrowser('chrome').build()
+describe('Token negotiation', function () {
+    test('Non-recurring token', async function (vendorTab, providerTab) {
+        const transactionId = await browser.negotiateToken(vendorTab, providerTab, 1, 'USD')
 
+        await browser.startTokenAction(vendorTab, transactionId, 'Show')
+        const tokenAtVendor = await browser.getDisplayedToken(vendorTab)
 
-async function openTabs() {
-    await driver.get('http://localhost:3000/')
+        await browser.startTokenAction(providerTab, transactionId, 'Show')
+        const tokenAtProvider = await browser.getDisplayedToken(providerTab)
 
-    await driver.switchTo().newWindow('tab')
-    await driver.get('http://localhost:8000/')
+        assert.equal(tokenAtProvider, tokenAtVendor)
+        assert.equal(JSON.parse(tokenAtProvider).transaction.recurring, null)
+    })
+    
+    test('Recurring token', async function (vendorTab, providerTab) {
+        const transactionId = await browser.negotiateToken(vendorTab, providerTab, 1, 'USD', 'monthly')
 
-    const windowHandles = await driver.getAllWindowHandles()
-    return windowHandles
-}
+        await browser.startTokenAction(vendorTab, transactionId, 'Show')
+        const tokenAtVendor = await browser.getDisplayedToken(vendorTab)
 
+        await browser.startTokenAction(providerTab, transactionId, 'Show')
+        const tokenAtProvider = await browser.getDisplayedToken(providerTab)
 
-async function startVendorTransaction(vendorTab, amount, currency) {
-    await driver.switchTo().window(vendorTab)
-    await driver.findElement(By.id('amount')).sendKeys(amount)
-    await driver.findElement(By.id('currency')).sendKeys(currency, Key.RETURN)
-
-    return await driver.findElement(By.xpath('//p/b[contains(text(), "stp://")]')).getText()
-}
-
-
-async function getPinFromVendor(vendorTab) {
-    await driver.switchTo().window(vendorTab)
-    let pin = await driver.findElement(By.id('pin')).getText()
-    while (pin === '...') {
-        await new Promise(r => setTimeout(r, 100))
-        pin = await driver.findElement(By.id('pin')).getText()
-    }
-    return pin
-}
-
-
-async function tokenNegotiation() {
-    const [ vendorTab, providerTab ] = await openTabs()
-
-    const stpUrl = await startVendorTransaction(vendorTab, 1, 'USD')
-
-    await driver.switchTo().window(providerTab)
-    await driver.findElement(By.id('url')).sendKeys(stpUrl, Key.RETURN)
-
-    const pin = await getPinFromVendor(vendorTab)
-
-    await driver.switchTo().window(providerTab)
-    await driver.findElement(By.id('pin')).sendKeys(pin, Key.RETURN)
-
-    const tokenAtProvider = await driver.findElement(By.xpath('//pre')).getText()
-    const transactionId = JSON.parse(tokenAtProvider).transaction.id
-
-    await driver.switchTo().window(vendorTab)
-    await driver.findElement(By.xpath('//a[@href="/"]')).click()
-    await driver.findElement(By.xpath(`//a[@href="/token/${transactionId}"]`)).click()
-    const tokenAtVendor = await driver.findElement(By.xpath('//pre')).getText()
-
-    assert.equal(tokenAtProvider, tokenAtVendor)
-
-    await driver.quit()
-}
-
-
-tokenNegotiation()
+        assert.equal(tokenAtProvider, tokenAtVendor)
+        assert.notEqual(JSON.parse(tokenAtProvider).transaction.recurring, null)
+    })
+})
