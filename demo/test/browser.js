@@ -1,4 +1,5 @@
 import { Builder, By, Key, until } from 'selenium-webdriver'
+import utils from '../common/utils.js'
 
 
 let driver = null
@@ -48,7 +49,7 @@ async function getPinFromVendor(vendorTab) {
     await driver.switchTo().window(vendorTab)
     let pin = await driver.findElement(By.id('pin')).getText()
     while (pin === '...') {
-        await new Promise(r => setTimeout(r, 100))
+        await utils.sleep(100)
         pin = await driver.findElement(By.id('pin')).getText()
     }
     return pin
@@ -75,7 +76,8 @@ async function backToMainPage(tab) {
 
 async function getDisplayedToken(tab) {
     await driver.switchTo().window(tab)
-    return await driver.findElement(By.xpath('//pre')).getText()
+    const tokenStr = await driver.findElement(By.xpath('//pre')).getText()
+    return await JSON.parse(tokenStr)
 }
 
 
@@ -117,6 +119,7 @@ async function toggleInstantAccept(providerTab) {
 
 async function acceptConfirmAlert(providerTab) {
     await driver.switchTo().window(providerTab)
+    await driver.navigate().refresh()
     await driver.wait(until.alertIsPresent())
     const alert = await driver.switchTo().alert()
     await alert.accept()
@@ -131,12 +134,11 @@ async function negotiateToken(vendorTab, providerTab, amount, currency, recurrin
     await acceptTransaction(providerTab, pin)
 
     const tokenAtProvider = await getDisplayedToken(providerTab)
-    const transactionId = JSON.parse(tokenAtProvider).transaction.id
 
     await backToMainPage(providerTab)
     await backToMainPage(vendorTab)
 
-    return transactionId
+    return tokenAtProvider.transaction.id
 }
 
 export default {

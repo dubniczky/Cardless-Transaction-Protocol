@@ -42,7 +42,7 @@
                 document.getElementById('tokens').innerHTML = listHtml
             })
         acceptModifyChanged()
-        setTimeout(checkOngoinModifications, 10000)
+        checkOngoinModifications()
         
         function acceptModifyChanged() {
             fetch('/set_accept_modify', {
@@ -63,7 +63,6 @@
                 .then(res => res.json())
                 .then(res => {
                     if (res.id) {
-                        console.log(formatModification(res))
                         const accepted = confirm(formatModification(res))
                         fetch(`/handle_modification/${res.id}`, {
                             method: 'POST',
@@ -74,7 +73,6 @@
                         })
                     }
                 })
-            setTimeout(checkOngoinModifications, 10000)
         }
     </script>
 </body>
