@@ -1,0 +1,7 @@
+More and more online purchases revolve arount subscription models. All of this with the implicit trust that the vendors will take the correct amount of money each time. Canceling subscriptions usually involves a tedious process of answering surveys and finding the correct options hidden on the vendor's page. They might also store those banking details and use them afterward, increasing them as a target for potential hackers. With card payments, it is trivial to steal funds or impersonate users in case of a breach.
+
+Our proposal is a new, unified cardless banking standard, where vendors are issued a token, allowing them to use each for pre-approved transactions. In this thesis, we are creating our own standard solution to this problem and substatniate it with a demo system with guidelines for implementation.
+
+The protocol utilizes hash-based RSA signatures to veriify the transatction details first from the vendor side, then the provider side. The token also contains the public keys from both providers for the verification to facilitate further negotion about the state of the token, such as revocation or modification of recurring data.
+
+In the authentication flow, these tokens would replace credit cards normally used for online services. This greatly increases the entropy for a valid credit card address and reduces the chances of phishing attacks, as customers would never directly come in contact with such tokens, thus being unable to disclose them with attackers.
