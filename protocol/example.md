@@ -31,7 +31,7 @@ url_signature: SWvwHAstKjI7tRGdJqaUT5eA5mljMP2HAzKqo8fw...
 verification_pin: 1234
 ```
 
-### VendorToken
+### VendorOffer
 
 > Success
 ```yaml
@@ -85,7 +85,7 @@ The pin code is displayed on the vendor's site. That pin is going to verify the 
 
 The user selects approve or deny on the application. If they tap approve, they will be prompted to enter the PIN code displayed on the vendor's site.
 
-### ProviderToken
+### ProviderConfirm
 
 > Success
 ```yaml
