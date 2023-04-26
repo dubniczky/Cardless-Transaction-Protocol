@@ -93,8 +93,8 @@ The user selects approve or deny on the application. If they tap approve, they w
 allowed: true
 # JWT token signed by both the provider and the vendor
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmMiOi...
-# Url to modify, refresh, revoke token later (not signed)
-change_url: stp://provider.com/api/stp/change
+# Pre-signed url to modify, refresh, revoke token later
+remediation_url: stp://provider.com/api/stp/change/26A50373-6290-4EDD-8F8D-ED22C5DE9299
 ```
 
 > Failure
@@ -120,8 +120,8 @@ The `error_message` can ba customized/localized by the vendor, but not the `erro
 ```yaml
 # Whether the received token was valid or not
 success: true
-# Url to notify vendor about token changes
-notify_url: stp://vendor.com/api/stp/notify
+# Pre-signed url to notify vendor about token changes
+revision_url: stp://vendor.com/api/stp/revision/7060129E-4FBC-48CD-AA2A-9FB2E718777E
 ```
 
 > Failure
@@ -191,242 +191,177 @@ signatures:
 The token is a JSON object. For signatures the tokens are converted to string with `JSON.stringify`
 
 
-# Example change request
+# Example token remediation
 
-If the vendor wants to modify, refresh, revoke any token later, then it can be done by sending a change request to the `change_url` sent by the provider previously
+If the vendor wants to modify, refresh, revoke any token later, then it can be done by sending a change request to the `remediation_url` sent by the provider previously
 
-## 1. Authentication
+## VendorRemediate
 
-The vendor and the provider authenticate each other by signing a challenge sent by the other party
-
-### VendorChall
+### Revoking token
 
 ```yaml
 # The id of the transaction the vendor wants to change
 transaction_id: STPEXPROV_8497404125
 # A random challenge to authenticate the provider (30 bytes, 40 base64 characters)
 challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
+# Remediation URL signed by the vendor with the key which was used to sign the transaction token (in base64)
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+# Remediation verb
+remediation_verb: REVOKE
 ```
 
-### ProviderVerifChall
+### Refreshing token
 
-> Success
 ```yaml
-# Whether the provider has the token with the transaction_id or not
-success: true
-# The vendor's challenge signed by the key which was used to sign the transaction token (in base64)
-response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
-# A random challenge to authenticate the vendor (30 bytes, 40 base64 characters)
-challenge: ytFWHdzKEPe7tPKMvrXq+BPvL7c6nGl5FKjGFlgz
-# The url, where the vendor can send an authenticated change request
-next_url: stp://provider.com/api/stp/change_next/STPEXPROV_8497404125
-```
-
-> Failure
-```yaml
-success: false
-error_code: ID_NOT_FOUND
-error_message: The given transaction_id has no associated tokens
-```
-
-## 2. Change request
-
-After authentication the change request can be made to the `next_url`
-
-### VendorVerifChange
-
-> Revoking token
-```yaml
-# Whether the authentication was successful
-success: true
-# The providers's challenge signed by the key which was used to sign the transaction token (in base64)
-response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
-# Change verb
-change_verb: REVOKE
-```
-
-> Refreshing token
-```yaml
-success: true
-response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
-# Change verb
-change_verb: REFRESH
+transaction_id: STPEXPROV_8497404125
+challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+remediation_verb: REFRESH
 # The refreshed transaction JWT signed by the vendor in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 Refreshing increments the `transaction.recurring.index` and updates the `transaction.recurring.next`
 
-> Modifying token
+### Modifying token
+
 ```yaml
-success: true
-response: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
-# Change verb
-change_verb: MODIFY
-# The subject of modification
-modification:
-  # (Optional) new amount
-  amount: 12.66
-  # (Optional) new currency
-  currency: USD
-  # (Optional) new period
-  period: monthly
+transaction_id: STPEXPROV_8497404125
+challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+remediation_verb: MODIFY
+# The new amount
+modified_amount: 12.66
 # The modified transaction JWT signed by the vendor in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
-The vendor can modify the `transaction.amount`, the `transaction.currency` or the `transaction.recurring.period`
+The vendor can ONLY modify the `transaction.amount`. For other changes new token negotiation is necessary
 
-> Auth failure
-```yaml
-success: false
-error_code: AUTH_FAILED
-error_message: The provider's response to the challenge was not appropriate
-```
+## ProviderResponse
 
-### ProviderAck
+### Revoking successful
 
-> Revoking successful
 ```yaml
 # Whether the authentication and the change was successful
 success: true
+# The vendor's challenge signed by the key which was used to sign the transaction token (in base64)
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 ```
 
-> Refreshing successful
+### Refreshing successful
 ```yaml
 success: true
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 # The refreshed transaction JWT signed by the both the vendor and the provider in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
-> Modification successful
+### Modification successful
+
 ```yaml
 success: true
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 # Modification status
 modification_status: ACCEPTED
 # The modified transaction JWT signed by the both the vendor and the provider in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
-> Modification pending
+### Modification pending
+
 ```yaml
 success: true
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 # Modification status
 modification_status: PENDING
 ```
 
-> Failure
+### Failure
+
 ```yaml
 success: false
 error_code: AUTH_FAILED
-error_message: The vendor's response to the challenge was not appropriate
+error_message: The vendor's signature of the remediation URL is not valid
 ```
 
 #### Possible errors:
 
 |error_code|error_message|
 |---|---|
-|AUTH_FAILED|The vendor's response to the challenge was not appropriate|
+|AUTH_FAILED|The vendor's signature of the remediation URL is not valid|
 |INCORRECT_TOKEN|The refreshed token contains incorrect data|
 |INCORRECT_TOKEN_SIGN|The refreshed token is not signed properly|
-|UNKNOWN_CHANGE_VERB|Unsupported change_verb|
+|UNKNOWN_REMEDIATION_VERB|Unsupported remediation_verb|
 |MODIFICATION_REJECTED|The provider rejected the modification|
 
 The `error_message` can ba customized/localized by the vendor, but not the `error_code`
 
 
-# Example notification
+# Example token revision
 
-The provider can notify the vendor about changes in the token's validity by sending notification to the `notify_url` sent by the vendor in the token negotiation phase. This method can be used to finish pending modification request too.
+The provider can notify the vendor about changes in the token's validity by sending notification to the `revision_url` sent by the vendor in the token negotiation phase. This method can be used to finish pending modification request too.
 
-## 1. Authentication
+## ProviderRevise
 
-The vendor and the provider authenticate each other by signing a challenge sent by the other party
-
-### ProviderChall
+### Revoking token
 
 ```yaml
 # The id of the transaction the provider wants to send notification about
 transaction_id: STPEXPROV_2057169785
 # A random challenge to authenticate the vendor (30 bytes, 40 base64 characters)
 challenge: 1dFMqKhh3TGUwkBfW6FmZhE+fURLNcaec0LArkG9
+# Revision URL signed by the provider with the key which was used to sign the transaction token (in base64)
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+# Revision verb
+revision_verb: REVOKE
 ```
 
-### VendorVerifChall
+### Accepting pending token modification
 
-> Success
 ```yaml
-# Whether the vendor has the token with the transaction_id or not
-success: true
-# The provider's challenge signed by the key which was used to sign the transaction token (in base64)
-response: nKnZL8bj2+bpReTZ55OlsEiuSfSyB6wA03TmIGHvr/zm...
-# A random challenge to authenticate the provider (30 bytes, 40 base64 characters)
-challenge: 7jvXvTQc2a6cYmr23o6/eQBNhkKdkzGMMmHlx6hr
-# The url, where the provider can send an authenticated notification
-next_url: stp://vendor.com/api/stp/notify_next/STPEXPROV_2057169785
-```
-
-> Failure
-```yaml
-success: false
-error_code: ID_NOT_FOUND
-error_message: The given transaction_id has no associated tokens
-```
-
-## 2. Notification
-
-After authentication the notification can be sent to the `next_url`
-
-### ProviderVerifNotify
-
-> Revoking token
-```yaml
-# Whether the authentication was successful
-success: true
-# The vendor's challenge signed by the key which was used to sign the transaction token (in base64)
-response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
-# Notification verb
-notify_verb: REVOKE
-```
-
-> Accepting pending token modification
-```yaml
-success: true
-response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
-# Notification verb
-notify_verb: FINISH_MODIFICATION
+transaction_id: STPEXPROV_2057169785
+challenge: 1dFMqKhh3TGUwkBfW6FmZhE+fURLNcaec0LArkG9
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+revision_verb: FINISH_MODIFICATION
 # Modification status
 modification_status: ACCEPTED
 # The modified transaction JWT signed by the both the vendor and the provider in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
-> Rejecting pending token modification
-```yaml
-success: true
-response: jD6zZ0ogkn/xEnS6HI/yM8a0PH3c17XSCecPrQJQcVyPk...
-# Notification verb
-notify_verb: FINISH_MODIFICATION
-# Modification status
-modification_status: REJECTED
-```
+### Rejecting pending token modification
 
-> Auth failure
 ```yaml
-success: false
-error_code: AUTH_FAILED
-error_message: The vendor's response to the challenge was not appropriate
+transaction_id: STPEXPROV_2057169785
+challenge: 1dFMqKhh3TGUwkBfW6FmZhE+fURLNcaec0LArkG9
+url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
+revision_verb: FINISH_MODIFICATION
+modification_status: REJECTED
 ```
 
 ### VendorAck
 
-> Operation successful
+### Success
+
 ```yaml
-# Whether the authentication and the notification was successful
+# Whether the authentication and the revision was successful
 success: true
+# The provider's challenge signed by the key which was used to sign the transaction token (in base64)
+response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 ```
 
-> Auth failure
+### Failure
+
 ```yaml
 success: false
 error_code: AUTH_FAILED
-error_message: The provider's response to the challenge was not appropriate
+error_message: The provider's signature of the revision URL is not valid
 ```
+
+#### Possible errors:
+
+|error_code|error_message|
+|---|---|
+|AUTH_FAILED|The provider's signature of the revision URL is not valid|
+|UNKNOWN_REVISION_VERB|Unsupported revision_verb|
+
+The `error_message` can ba customized/localized by the vendor, but not the `error_code`
