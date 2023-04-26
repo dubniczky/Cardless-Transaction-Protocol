@@ -9,5 +9,11 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "hash-wasm": "^4.9.0",
+    "libsodium-wrappers-sumo": "^0.7.11",
+    "sodiumutil": "^4.0.2",
+    "superfalcon": "^2.0.4"
+  }
 }

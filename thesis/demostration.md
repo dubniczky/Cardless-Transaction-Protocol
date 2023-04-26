@@ -24,7 +24,15 @@ The demonstration contains 5 subfolders:
 - The `test` folder contains the automated end-to-end tests. These test are implemented in the `test.js` file, while the `testenv.js` file provides functionality to rebuild the test environment before each testcase. Finally the `browser.js` hides all selenium related impolementations
 - Finally the `vendor` folder contains the vendor demo application's implementation. In structure it is almost identical to the provider application
 
-### The protocol implementation
+### Implementation of the Token negotiation
+
+TODO - specification here?
+
+### Implementation of the Token remediation
+
+TODO
+
+### Implementation of the Token revision
 
 TODO
 
@@ -51,10 +59,6 @@ Our end-to-end tests consist of test groups, each of which contains test cases. 
     - Delayed accept
 
 This way all of the the token negotiation, remediation and revision procedures are covered by testcases to ensure the quality of the demonstrations we created.
-
-## User manual
-
-TODO
 
 ## Benchmarks
 

@@ -1,0 +1,58 @@
+lockfileVersion: 5.4
+
+specifiers:
+  hash-wasm: ^4.9.0
+  libsodium-wrappers-sumo: ^0.7.11
+  sodiumutil: ^4.0.2
+  superfalcon: ^2.0.4
+
+dependencies:
+  hash-wasm: 4.9.0
+  libsodium-wrappers-sumo: 0.7.11
+  sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
+  superfalcon: 2.0.4
+
+packages:
+
+  /falcon-crypto/1.0.4:
+    resolution: {integrity: sha512-afN41He53VLO8iMO4LHqFZVurJVGb/lix4bntiO1gGT09nK0X2GZaZNdL9ogwzX1zCcsVzqEWTYUH2AX1y6+Hw==}
+    dev: false
+
+  /fast-sha512/1.0.4_cxzimadrp54sbwcpkqemddv5pm:
+    resolution: {integrity: sha512-WFKli7kH9C7b64GJPWADVfZX5aEvHZviFhY210DpchO915ynJTkK3Sd8Pkj56+Gpam5XgGTI8nFCeHUiQ1JQIQ==}
+    dependencies:
+      sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
+    transitivePeerDependencies:
+      - libsodium-wrappers-sumo
+    dev: false
+
+  /hash-wasm/4.9.0:
+    resolution: {integrity: sha512-7SW7ejyfnRxuOc7ptQHSf4LDoZaWOivfzqw+5rpcQku0nHfmicPKE51ra9BiRLAmT8+gGLestr1XroUkqdjL6w==}
+    dev: false
+
+  /libsodium-sumo/0.7.11:
+    resolution: {integrity: sha512-bY+7ph7xpk51Ez2GbE10lXAQ5sJma6NghcIDaSPbM/G9elfrjLa0COHl/7P6Wb/JizQzl5UQontOOP1z0VwbLA==}
+    dev: false
+
+  /libsodium-wrappers-sumo/0.7.11:
+    resolution: {integrity: sha512-DGypHOmJbB1nZn89KIfGOAkDgfv5N6SBGC3Qvmy/On0P0WD1JQvNRS/e3UL3aFF+xC0m+MYz5M+MnRnK2HMrKQ==}
+    dependencies:
+      libsodium-sumo: 0.7.11
+    dev: false
+
+  /sodiumutil/4.0.2_cxzimadrp54sbwcpkqemddv5pm:
+    resolution: {integrity: sha512-CBUEG+bB9RNm7HR4SVTI5PI+l/Re0ov7E/I95Z0qNf4nScMPnW3THsXloOE4QKKiyAbWeN+KNMODCkWPCHdspQ==}
+    peerDependencies:
+      libsodium-wrappers-sumo: '*'
+    dependencies:
+      libsodium-wrappers-sumo: 0.7.11
+    dev: false
+
+  /superfalcon/2.0.4:
+    resolution: {integrity: sha512-nqwtNXScvpmUtB6ktN5EiLVmDuuYgxKhVaNsaVJ8amzy+ygWUpeZElwK8ppCSq25PLZdl+cWjUPdIX9gBzsXGA==}
+    dependencies:
+      falcon-crypto: 1.0.4
+      fast-sha512: 1.0.4_cxzimadrp54sbwcpkqemddv5pm
+      libsodium-wrappers-sumo: 0.7.11
+      sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
+    dev: false
