@@ -25,6 +25,8 @@ bic: ABCDHUBP001
 random: gG7HD+JRhc2FszVdPfGR/LF6KTgXxjE1bHXdEU8F
 # Bank transaction id. Format: uuid4
 transaction_id: 013CCF92-1313-434B-A838-6BE3D9645DD1
+# Encrypted ID of the user by the bank
+customer: juastf89234r2bewiohfwf6qw
 # Signed URL signed by bank private key (vendor can verify with bank public key list) in base64 format
 url_signature: SWvwHAstKjI7tRGdJqaUT5eA5mljMP2HAzKqo8fw...
 # The PIN will be required to be entered in the application to verify the transaction (2-6 digits)
@@ -169,6 +171,8 @@ transaction:
   provider: REVOLT21
   # The amount of the transaction
   amount: 12.66
+  # Encrypted ID of the user by the bank
+  customer: juastf89234r2bewiohfwf6qw
   # The currency of the transaction
   currency: USD
   # Recurrance information (null for one-time tokens)
@@ -187,8 +191,6 @@ signatures:
   vendor_key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4iAzt4C4T16wclcCbo9pXZn...
   # Added by the bank when signing the token or signing the refresh or modified version
   signed_at: '2023-04-12T20:03:12.477Z'
-  # Encrypted ID of the user by the bank
-  customer: juastf89234r2bewiohfwf6qw
   # The provider's signature of the metadata, transaction, vendor and vendor_key parts of the token
   provider: L5oaGF/zyMxmY4r6bZfU/ow5TPoMzvL5xqUjc7//nDiKCzlmdXmE...
   # The provider's public key for checking signature validity (PEM format without header, footer and new lines)
