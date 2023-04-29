@@ -100,14 +100,11 @@ async function getListOfTokens(tab) {
 }
 
 
-async function startModificationRequest(vendorTab, amount, currency, recurring = 'one_time') {
+async function startModificationRequest(vendorTab, amount) {
     await driver.switchTo().window(vendorTab)
     await clearInput(await driver.findElement(By.id('amount')))
-    await clearInput(await driver.findElement(By.id('currency')))
 
-    await driver.findElement(By.id('amount')).sendKeys(amount)
-    await selectOption(await driver.findElement(By.id('recurring')), recurring)
-    await driver.findElement(By.id('currency')).sendKeys(currency, Key.RETURN)
+    await driver.findElement(By.id('amount')).sendKeys(amount, Key.RETURN)
 }
 
 

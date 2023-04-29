@@ -123,7 +123,7 @@ describe('Token modification', function () {
         await browser.backToMainPage(vendorTab)
 
         await browser.startTokenAction(vendorTab, transactionId, 'Modify')
-        await browser.startModificationRequest(vendorTab, 2, 'EUR')
+        await browser.startModificationRequest(vendorTab, 2)
 
         await browser.startTokenAction(vendorTab, transactionId, 'Show')
         const vendorTokenAfter = await browser.getDisplayedToken(vendorTab)
@@ -135,8 +135,8 @@ describe('Token modification', function () {
         assert.equal(vendorTokenBefore.transaction.recurring, null)
 
         assert.equal(vendorTokenAfter.transaction.amount, 2)
-        assert.equal(vendorTokenAfter.transaction.currency, 'EUR')
-        assert.equal(vendorTokenAfter.transaction.recurring, null)
+        assert.equal(vendorTokenAfter.transaction.currency)
+        assert.equal(vendorTokenAfter.transaction.recurring)
         assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
         assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))
 
@@ -152,7 +152,7 @@ describe('Token modification', function () {
 
         await browser.toggleInstantAccept(providerTab)
         await browser.startTokenAction(vendorTab, transactionId, 'Modify')
-        await browser.startModificationRequest(vendorTab, 2, 'EUR')
+        await browser.startModificationRequest(vendorTab, 2)
         await browser.acceptConfirmAlert(providerTab)
 
         await browser.startTokenAction(vendorTab, transactionId, 'Show')
@@ -165,7 +165,7 @@ describe('Token modification', function () {
         assert.equal(vendorTokenBefore.transaction.recurring, null)
 
         assert.equal(vendorTokenAfter.transaction.amount, 2)
-        assert.equal(vendorTokenAfter.transaction.currency, 'EUR')
+        assert.equal(vendorTokenAfter.transaction.currency)
         assert.equal(vendorTokenAfter.transaction.recurring, null)
         assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
         assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))

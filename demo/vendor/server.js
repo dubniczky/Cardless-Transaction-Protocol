@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import validator from './validator.js'
 import protocol from './protocol.js'
-import { getAllTokensList, getToken, popOngoingChallenge }  from './protocolState.js'
+import { getAllTokensList, getToken }  from './protocolState.js'
 
 
 const app = express()
@@ -62,37 +62,22 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
 })
 
 
-app.post('/api/stp/notify', async (req, res) => {
-    utils.logMsg('ProviderChall', req.body)
-    if (!validator.doesTokenExist(res, req.body.transaction_id)) {
+app.post('/api/stp/revision/:uuid', async (req, res) => {
+    const uuid = req.params.uuid
+    utils.logMsg('ProviderRevise', req.body)
+    if (!validator.checkProviderRevise(req, res, uuid)) {
         return
     }
 
-    protocol.sendVendorVerifChall(req, res, port)
-})
-
-
-app.post('/api/stp/notify_next/:id', async (req, res) => {
-    const id = req.params.id
-    utils.logMsg('ProviderVerifNotify', req.body)
-    if (!validator.isOngoingChallenge(res, id)) {
-        return
-    }
-
-    const challenge = popOngoingChallenge(id)
-    if (!validator.checkProviderVerifNotify(req, res, id, challenge)) {
-        return
-    }
-
-    switch (req.body.notify_verb) {
+    switch (req.body.revision_verb) {
         case 'REVOKE':
-            protocol.handleRevokeNotification(res, id)
+            protocol.handleRevokeRevision(req, res)
             break
         case 'FINISH_MODIFICATION':
-            protocol.handleFinishModifyNotification(req, res, id)
+            protocol.handleFinishModifyRevision(req, res)
             break
         default:
-            protocol.handleUnknownNotification(res)
+            protocol.handleUnknownRevision(res)
     }
 })
 
@@ -117,7 +102,7 @@ app.get('/revoke/:id', async (req, res) => {
         return
     }
 
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REVOKE')
+    const [ err_code, err_msg ] = await protocol.remediateToken(id, 'REVOKE')
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -135,7 +120,7 @@ app.get('/refresh/:id', async (req, res) => {
         return
     }
     
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'REFRESH')
+    const [ err_code, err_msg ] = await protocol.remediateToken(id, 'REFRESH')
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -167,12 +152,8 @@ app.post('/modify/:id', async (req, res) => {
         return
     }
     
-    const modificationData = {
-        amount: req.body.amount,
-        currency: req.body.currency,
-        period: protocol.recurringOptionToPeriod(req.body.recurring)
-    }
-    const [ err_code, err_msg ] = await protocol.changeRequest(id, 'MODIFY', modificationData)
+    const modifiedAmount = req.body.amount
+    const [ err_code, err_msg ] = await protocol.remediateToken(id, 'MODIFY', modifiedAmount)
     if (err_code) {
         return res.render('error', {
             error_code: err_code,

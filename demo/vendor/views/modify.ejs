@@ -14,17 +14,8 @@
         <input type="number" id="amount" name="amount" value="<%= amount %>" required>
         <br><br>
 
-        <label for="currency">Currency:</label>
-        <input type="text" id="currency" name="currency" value="<%= currency %>" required>
-        <br><br>
-
-        <label for="recurring">Recurring:</label>
-        <select id="recurring" name="recurring" value="<%= recurring %>" required>
-            <option value="one_time">One time</option>
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="annual">Annual</option>
-        </select>
+        <p><b>Currency:</b> <%= currency %></p>
+        <p><b>Recurring:</b> <%= recurring %></p>
         <br><br>
 
         <button type="submit">Modify token</button>

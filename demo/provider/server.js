@@ -3,7 +3,7 @@ import express from 'express'
 import utils from '../common/utils.js'
 import protocol from './protocol.js'
 import validator from './validator.js'
-import { popOngoingTransaction, popOngoingModification, popOngoingChallenge, getAllTokensList, getToken } from './protocolState.js'
+import { popOngoingTransaction, popOngoingModification, getAllTokensList, getToken } from './protocolState.js'
 
 
 const app = express()
@@ -77,42 +77,25 @@ app.post('/set_accept_modify', async (req, res) => {
 })
 
 
-app.post('/api/stp/change', async (req, res) => {
-    utils.logMsg('VendorChall', req.body)
-    if (!utils.doesBodyContainFields(req, res, [ 'transaction_id', 'challenge' ]) ||
-        !validator.doesTokenExist(res, req.body.transaction_id)) {
+app.post('/api/stp/remediation/:uuid', async (req, res) => {
+    const uuid = req.params.uuid
+    utils.logMsg('VendorRemediate', req.body)
+    if (!validator.checkVendorRemediate(req, res, uuid)) {
         return
     }
 
-    const providerVerifChall = protocol.generateProviderVerifChall(req.body.transaction_id, req.body.challenge, port)
-    res.send(providerVerifChall)
-})
-
-
-app.post('/api/stp/change_next/:id', async (req, res) => {
-    const id = req.params.id
-    utils.logMsg('VendorVerifChange', req.body)
-    if (!validator.isOngoingChallenge(res, id)) {
-        return
-    }
-
-    const challenge = popOngoingChallenge(id)
-    if (!validator.checkVendorVerifChange(req, res, id, challenge)) {
-        return
-    }
-
-    switch (req.body.change_verb) {
+    switch (req.body.remediation_verb) {
         case 'REVOKE':
-            protocol.handleRevokeChange(res, id)
+            protocol.handleRevokeRemediation(req, res)
             break
         case 'REFRESH':
-            protocol.handleRefreshChange(res, id, req.body.token)
+            protocol.handleRefreshRemediation(req, res)
             break
         case 'MODIFY':
-            protocol.handleModificationChange(res, id, req.body.token, req.body.modification, instantlyAcceptModify)
+            protocol.handleModificationRemediation(req, res, instantlyAcceptModify)
             break
         default:
-            protocol.handleUnknownChangeVerb(res)
+            protocol.handleUnknownRemediationVerb(res)
     }
 })
 
@@ -137,7 +120,7 @@ app.get('/revoke/:id', async (req, res) => {
         return
     }
 
-    const [ err_code, err_msg ] = await protocol.notify(id, 'REVOKE')
+    const [ err_code, err_msg ] = await protocol.reviseToken(id, 'REVOKE')
     if (err_code) {
         return res.render('error', {
             error_code: err_code,
@@ -166,7 +149,7 @@ app.post('/handle_modification/:id', async (req, res) => {
     const accept = req.body.accept
     const modification = popOngoingModification(id)
 
-    const [ err_code, err_msg ] = await protocol.notify(id, 'FINISH_MODIFICATION', { accept: accept, token: modification.token })
+    const [ err_code, err_msg ] = await protocol.reviseToken(id, 'FINISH_MODIFICATION', { accept: accept, token: modification.token })
     if (err_code) {
         return res.render('error', {
             error_code: err_code,

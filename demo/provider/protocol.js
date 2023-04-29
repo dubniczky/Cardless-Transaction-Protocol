@@ -79,7 +79,7 @@ async function handleUserInput(url, vendorToken, port) {
     const providerTokenMsg = {
         allowed: true,
         token: utils.objectToBase64(token),
-        change_url: `stp://localhost:${port}/api/stp/change`
+        remediation_url: `stp://localhost:${port}/api/stp/remediation/${crypto.randomUUID()}`
     }
 
     const vendorAck = await utils.postStpRequest(url, providerTokenMsg)
@@ -95,7 +95,7 @@ async function handleUserInput(url, vendorToken, port) {
     }
 
     protocolState.tokens[token.transaction.id] = token
-    protocolState.tokenNotifyUrls[token.transaction.id] = vendorAck.notify_url
+    protocolState.tokenNotifyUrls[token.transaction.id] = vendorAck.revision_url
     return [ null, null ]
 }
 
@@ -148,10 +148,13 @@ function isRefreshedTokenValid(oldToken, newToken) {
  * @param {Response} res - The `ProviderAck` response 
  * @param {string} id - The transaction ID related to the change request
  */
-function handleRevokeChange(res, id) {
-    delete protocolState.tokens[id]
-    delete protocolState.tokenNotifyUrls[id]
-    res.send({ success: true })
+function handleRevokeRemediation(req, res) {
+    delete protocolState.tokens[req.body.transaction_id]
+    delete protocolState.tokenNotifyUrls[req.body.transaction_id]
+    res.send({
+        success: true,
+        response: utils.signChall(req.body.challenge, keys.private)
+    })
 }
 
 /**
@@ -160,9 +163,9 @@ function handleRevokeChange(res, id) {
  * @param {string} id - The transaction ID related to the change request
  * @param {string} base64Token - The refreshed vendor STP token as a base64 string
  */
-function handleRefreshChange(res, id, base64Token) {
-    const token = utils.base64ToObject(base64Token)
-    if (!utils.validateRes(res, isRefreshedTokenValid(getToken(id), token),
+function handleRefreshRemediation(req, res) {
+    const token = utils.base64ToObject(req.body.token)
+    if (!utils.validateRes(res, isRefreshedTokenValid(getToken(req.body.transaction_id), token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
         !utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
             'INCORRECT_TOKEN_SIGN', 'The refreshed token is not signed properly')) {
@@ -170,9 +173,10 @@ function handleRefreshChange(res, id, base64Token) {
     }
 
     const fullToken = signToken(token)
-    protocolState.tokens[id] = fullToken
+    protocolState.tokens[req.body.transaction_id] = fullToken
     res.send({
         success: true,
+        response: utils.signChall(req.body.challenge, keys.private),
         token: utils.objectToBase64(fullToken)
     })
 }
@@ -187,8 +191,8 @@ function handleRefreshChange(res, id, base64Token) {
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
-function handleModificationChange(res, id, base64Token, modificationData, instantlyAcceptModify) {
-    const token = utils.base64ToObject(base64Token)
+function handleModificationRemediation(req, res, instantlyAcceptModify) {
+    const token = utils.base64ToObject(req.body.token)
     if (!utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
         'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
         return
@@ -196,20 +200,24 @@ function handleModificationChange(res, id, base64Token, modificationData, instan
 
     if (instantlyAcceptModify) {
         const fullToken = signToken(token)
-        protocolState.tokens[id] = fullToken
+        protocolState.tokens[req.body.transaction_id] = fullToken
         res.send({
             success: true,
+            response: utils.signChall(req.body.challenge, keys.private),
             modification_status: 'ACCEPTED',
             token: utils.objectToBase64(fullToken)
         })
     } else {
         protocolState.ongoing.modifications.push({
-            id: id,
-            modification: modificationData,
+            id: req.body.transaction_id,
+            modification: {
+                amount: req.body.modified_amount
+            },
             token: token,
         })
         res.send({
             success: true,
+            response: utils.signChall(req.body.challenge, keys.private),
             modification_status: 'PENDING'
         })
     }
@@ -219,7 +227,7 @@ function handleModificationChange(res, id, base64Token, modificationData, instan
  * Handles unknown change verb
  * @param {Response} res - The `ProviderAck` response
  */
-function handleUnknownChangeVerb(res) {
+function handleUnknownRemediationVerb(res) {
     res.send({
         success: false,
         error_code: 'UNKNOWN_CHANGE_VERB',
@@ -273,27 +281,18 @@ function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
-async function notify(transaction_id, notify_verb, modificationData = null) {
-    const challenge = utils.genChallenge(30)
-    const vendorVerifChall = await utils.postStpRequest(protocolState.tokenNotifyUrls[transaction_id], {
-        transaction_id: transaction_id,
-        challenge: challenge
-    })
-    utils.logMsg('VendorVerifChall', vendorVerifChall)
-    let result = validator.checkVendorVerifChall(vendorVerifChall)
-    if (result) {
-        return result
-    }
+async function reviseToken(transaction_id, revision_verb, modificationData = null) {
+    const providerRevise = generateProviderRevise(transaction_id, revision_verb, modificationData)
+    const revisionUrl = protocolState.tokenNotifyUrls[transaction_id]
+    const vendorResponse = await utils.postStpRequest(revisionUrl, providerRevise)
 
-    const providerVerifNotify = generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall, notify_verb, modificationData)
-    const vendorAck = await utils.postStpRequest(vendorVerifChall.next_url, providerVerifNotify)
-    utils.logMsg('VendorAck', vendorAck)
-    result = validator.checkVendorAck(vendorAck, providerVerifNotify)
+    utils.logMsg('VendorResponse', providerResponse)
+    let result = validator.checkVendorResponse(transaction_id, providerRevise.challenge, vendorResponse)
     if (result) {
         return result
     }
     
-    switch (notify_verb) {
+    switch (revision_verb) {
         case 'REVOKE':
             delete protocolState.tokens[transaction_id]
             delete protocolState.tokenNotifyUrls[transaction_id]
@@ -308,6 +307,6 @@ async function notify(transaction_id, notify_verb, modificationData = null) {
 
 
 export default {
-    sendProviderHello, handleUserInput, generateProviderVerifChall, handleRevokeChange, handleRefreshChange,
-    handleModificationChange, handleUnknownChangeVerb, notify
+    sendProviderHello, handleUserInput, generateProviderVerifChall, handleRevokeRemediation, handleRefreshRemediation,
+    handleModificationRemediation, handleUnknownRemediationVerb, reviseToken
 }

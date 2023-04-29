@@ -4,7 +4,6 @@ import fs from 'fs'
 export const protocolState = {
     ongoing: {
         transactions: {},
-        challenges: {},
         modifications: []
     },
     tokens: {},
@@ -25,17 +24,6 @@ export function popOngoingTransaction(id) {
     const transaction = protocolState.ongoing.transactions[id]
     delete protocolState.ongoing.transactions[id]
     return transaction
-}
-
-/**
- * Returns the challenge with the given ID. The challenge is removed from the queue
- * @param {string} id - The transaction ID associated with the challenge
- * @returns {string} The challenge as a base64 string
- */
-export function popOngoingChallenge(id) {
-    const challenge = protocolState.ongoing.challenges[id]
-    delete protocolState.ongoing.challenges[id]
-    return challenge
 }
 
 /**

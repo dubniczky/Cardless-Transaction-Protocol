@@ -97,7 +97,7 @@ allowed: true
 # JWT token signed by both the provider and the vendor
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmMiOi...
 # Pre-signed url to modify, refresh, revoke token later
-remediation_url: stp://provider.com/api/stp/change/26A50373-6290-4EDD-8F8D-ED22C5DE9299
+remediation_url: stp://provider.com/api/stp/remediation/26A50373-6290-4EDD-8F8D-ED22C5DE9299
 ```
 
 > Failure

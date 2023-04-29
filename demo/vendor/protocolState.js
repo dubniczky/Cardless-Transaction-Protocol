@@ -5,8 +5,7 @@ export const protocolState = {
     ongoing: {
         requests: {},
         responses: {},
-        requestPins: {},
-        challenges: {}
+        requestPins: {}
     },
     tokens: {},
     tokenChangeUrls: {}
@@ -41,19 +40,8 @@ export function popOngoingRequestPin(uuid) {
 }
 
 /**
- * Returns the challenge with the given ID. The challenge is removed from the queue
- * @param {string} id - The transaction ID associated with the challenge
- * @returns {string} The challenge as a base64 string
- */
-export function popOngoingChallenge(id) {
-    const challenge = protocolState.ongoing.challenges[id]
-    delete protocolState.ongoing.challenges[id]
-    return challenge
-}
-
-/**
  * Returns a list of all STP tokens
- * @returns {Object[]} The STP token
+ * @returns {Object[]} The STP tokens
  */
 export function getAllTokensList() {
     return Object.values(protocolState.tokens)
