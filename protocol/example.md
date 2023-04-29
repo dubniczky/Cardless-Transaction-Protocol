@@ -23,11 +23,11 @@ bank_name: mybank
 bic: ABCDHUBP001
 # Random code attached to the next request to prevent replay attack (30 bytes, 40 base64 characters)
 random: gG7HD+JRhc2FszVdPfGR/LF6KTgXxjE1bHXdEU8F
-# Bank transaction id. Format: bic_id. The id consists of alphanumeric characters
-transaction_id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+# Bank transaction id. Format: uuid4
+transaction_id: 013CCF92-1313-434B-A838-6BE3D9645DD1
 # Signed URL signed by bank private key (vendor can verify with bank public key list) in base64 format
 url_signature: SWvwHAstKjI7tRGdJqaUT5eA5mljMP2HAzKqo8fw...
-# The PIN will be required to be entered in the application to verify the transaction
+# The PIN will be required to be entered in the application to verify the transaction (2-6 digits)
 verification_pin: 1234
 ```
 
@@ -38,9 +38,9 @@ verification_pin: 1234
 # Bank data accepted by vendor
 success: true
 # Transaction ID 2 that the bank will have to refer to the transaction on approval
-transaction_id: AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
-# Pre-signed response URL that includes the transaction ID
-response_url: stp://vendor.com/api/ctp/response/AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
+confirmation_id: AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
+# Pre-signed response URL that includes the confirmation ID
+response_url: stp://vendor.com/api/stp/response/AD3621AD-2D2D-4BF7-A3EE-A71F054B6847
 # Vendor data
 vendor:
     # Display name
@@ -51,7 +51,7 @@ vendor:
     address: Washington, Imaginary st. 184
 # Transaction details
 transaction:
-    # Amount of the transaction
+    # Amount of the transaction (if null, it is metered)
     amount: 14.99
     # The used currency
     currency_code: USD
@@ -74,6 +74,7 @@ error_message: The requested version of the STP protocol is unavailable
 |---|---|
 |UNSUPPORTED_VERSION|The requested version of the STP protocol is unavailable|
 |INVALID_SIGNATURE|url_signature is not a valid signature of the provider|
+|DUPLICATE_RANDOM|Random nonce verification failed|
 
 The `error_message` can ba customized/localized by the vendor, but not the `error_code`
 
@@ -151,17 +152,19 @@ metadata:
   # The version of the token
   version: 1
   # The hashing algorithm used for signatures (SHA512)
-  alg: sha512
-  # The encoding the token is stored and transmitted in (base64)
-  enc: b64
-  # The public-key encryption scheme used for signatures (2048-bit RSA)
-  sig: rsa2048
+  alg: sha512,sha3512
+  # The encryption of remediation is a symmetric algorithm with the hash of the token
+  enc: sha512,aes256
+  # The public-key encryption scheme used for signatures
+  sig: falcon1024,ed25519
 # Transaction details
 transaction:
-  # Bank transaction id. Format: bic_id. The id consists of alphanumeric characters
-  id: ABCDHUBP001_aadsfgyjeyrtgaegfa
+  # Bank transaction id. Format: uuid4
+  id: 013CCF92-1313-434B-A838-6BE3D9645DD1
   # The expiry of the token formated as a ISO 8601 string
   expiry: '2023-04-12T20:03:12.477Z'
+  # Added by the provider upon first creating the offer
+  created_at: '2023-04-12T20:03:12.477Z'
   # The bic of the provider
   provider: REVOLT21
   # The amount of the transaction
@@ -182,6 +185,10 @@ signatures:
   vendor: oKbfJohV4Nq5rCeWM74uKnFyniAV2Ae9Sbr3Fwdr2H6OEuVzYpJjGYFFOZ+5...
   # The vendor's public key for checking signature validity (PEM format without header, footer and new lines)
   vendor_key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4iAzt4C4T16wclcCbo9pXZn...
+  # Added by the bank when signing the token or signing the refresh or modified version
+  signed_at: '2023-04-12T20:03:12.477Z'
+  # Encrypted ID of the user by the bank
+  customer: juastf89234r2bewiohfwf6qw
   # The provider's signature of the metadata, transaction, vendor and vendor_key parts of the token
   provider: L5oaGF/zyMxmY4r6bZfU/ow5TPoMzvL5xqUjc7//nDiKCzlmdXmE...
   # The provider's public key for checking signature validity (PEM format without header, footer and new lines)
@@ -213,11 +220,11 @@ remediation_verb: REVOKE
 ### Refreshing token
 
 ```yaml
-transaction_id: STPEXPROV_8497404125
+transaction_id: 013CCF92-1313-434B-A838-6BE3D9645DD1
 challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
 url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
 remediation_verb: REFRESH
-# The refreshed transaction JWT signed by the vendor in base64 format
+# The refreshed transaction JWT signed by the vendor and encrypted using the metadata.enc method in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 Refreshing increments the `transaction.recurring.index` and updates the `transaction.recurring.next`
@@ -225,7 +232,7 @@ Refreshing increments the `transaction.recurring.index` and updates the `transac
 ### Modifying token
 
 ```yaml
-transaction_id: STPEXPROV_8497404125
+transaction_id: 013CCF92-1313-434B-A838-6BE3D9645DD1
 challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
 url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
 remediation_verb: MODIFY
@@ -251,7 +258,7 @@ response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 ```yaml
 success: true
 response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
-# The refreshed transaction JWT signed by the both the vendor and the provider in base64 format
+# The refreshed transaction JWT signed both parties and encrypted using the metadata.enc method in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
@@ -262,7 +269,7 @@ success: true
 response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 # Modification status
 modification_status: ACCEPTED
-# The modified transaction JWT signed by the both the vendor and the provider in base64 format
+# The modified transaction JWT signed by both parties and encrypted using the metadata.enc method in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 
