@@ -31,6 +31,7 @@ TODO - specification here?
 ### Implementation of the Token remediation
 
 TODO
+Important note: dont sign token twice. Falcon gives different results
 
 ### Implementation of the Token revision
 
