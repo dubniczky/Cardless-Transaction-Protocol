@@ -122,7 +122,7 @@ function handleRevokeRevision(req, res) {
  */
 function handleFinishModifyRevision(req, res) {
     if (req.body.modification_status == 'ACCEPTED') {
-        protocolState.tokens[req.body.transaction_id] = utils.base64ToObject(req.body.token)
+        protocolState.tokens[req.body.transaction_id] = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
     }
     res.send({
         success: true,
@@ -152,7 +152,7 @@ function constructAndSignToken(transaction) {
         metadata: {
             version: 1,
             alg: 'sha512',
-            enc: 'b64',
+            enc: 'sha512,aes256',
             sig: 'rsa2048'
         },
         transaction: transaction
@@ -281,11 +281,11 @@ function generateVendorRemediate(transaction_id, remediation_verb, modified_amou
     const token = getToken(transaction_id)
     switch (remediation_verb) {
         case 'REFRESH':
-            vendorRemediate.token = utils.objectToBase64(generateRefreshedToken(token))
+            vendorRemediate.token = utils.encryptToken(token, generateRefreshedToken(token))
             break
         case 'MODIFY':
             vendorRemediate.modified_amount = modified_amount
-            vendorRemediate.token = utils.objectToBase64(generateModifiedToken(token, modified_amount))
+            vendorRemediate.token = utils.encryptToken(token, generateModifiedToken(token, modified_amount))
             break
     }
 

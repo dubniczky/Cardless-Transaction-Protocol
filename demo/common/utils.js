@@ -243,9 +243,57 @@ function doesBodyContainFields(req, res, fields) {
     return validateRes(res, fields.every((field) => field in req.body))
 }
 
+/**
+ * Generates the key and the IV used in token encryption/decryption from the original token
+ * @param {Object} originalToken - The original full STP token 
+ * @returns {[Buffer, Buffer]} [ key, iv ]
+ */
+function getKeyAndIV(originalToken) {
+    const originalTokenCopy = copyObject(originalToken)
+    originalTokenCopy.metadata.purpose = 'ENCRYPT'
+    const hash = crypto.createHash('sha512')
+        .update(Buffer.from(JSON.stringify(originalTokenCopy)))
+        .digest()
+    const key = hash.slice(0, 32)
+    const iv = hash.slice(32, 48)
+    return [ key, iv ]
+}
+
+/**
+ * Encrypts the new token with the original token
+ * @param {Object} originalToken - The original token
+ * @param {Object} tokenToEncrypt - The new token to encrypt
+ * @returns {string} The ecrypted new token as base64 string
+ */
+function encryptToken(originalToken, tokenToEncrypt) {
+    const [ key, iv ] = getKeyAndIV(originalToken)
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+    const cipherText = Buffer.concat([
+        cipher.update(Buffer.from(JSON.stringify(tokenToEncrypt))),
+        cipher.final()
+    ])
+    return cipherText.toString('base64')
+}
+
+/**
+ * Decrpyts the encrypted new token with the original token
+ * @param {Object} originalToken - The original token
+ * @param {string} tokenToDecrypt - The new token encrypted as a base64 string
+ * @returns {Object} The new token decrypted
+ */
+function decryptToken(originalToken, tokenToDecrypt) {
+    const [ key, iv ] = getKeyAndIV(originalToken)
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
+    const plainText = Buffer.concat([
+        decipher.update(Buffer.from(tokenToDecrypt, 'base64')),
+        decipher.final()
+    ])
+    return JSON.parse(plainText.toString())
+}
+
 export default {
     logMsg, copyObject, getNextRecurrance, pemKeyToRawKeyStr, rawKeyStrToPemPubKey, genChallenge,
     signChall, verifyChallResponse, cutIdFromUrl, sleep, formatJSON, base64ToObject, objectToBase64,
     postStpRequest, verifyProviderSignatureOfToken, verifyVendorSignatureOfToken, validateRes,
-    doesBodyContainFields
+    doesBodyContainFields, encryptToken, decryptToken
 }

@@ -145,7 +145,7 @@ function handleRevokeRemediation(req, res) {
  * @param {Response} res - The `ProviderResponse` response
  */
 function handleRefreshRemediation(req, res) {
-    const token = utils.base64ToObject(req.body.token)
+    const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
     if (!utils.validateRes(res, isRefreshedTokenValid(getToken(req.body.transaction_id), token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
         !utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
@@ -169,7 +169,7 @@ function handleRefreshRemediation(req, res) {
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
 function handleModificationRemediation(req, res, instantlyAcceptModify) {
-    const token = utils.base64ToObject(req.body.token)
+    const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
     if (!utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
         'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
         return
@@ -237,7 +237,7 @@ function generateProviderRevise(transaction_id, revision_verb, modificationData)
             if (modificationData.accept) {
                 providerRevise.modification_status = 'ACCEPTED'
                 const modifiedFullToken = signToken(modificationData.token)
-                providerRevise.token = utils.objectToBase64(modifiedFullToken)
+                providerRevise.token = utils.encryptToken(getToken(transaction_id), modifiedFullToken)
             } else {
                 providerRevise.modification_status = 'REJECTED'
             }
