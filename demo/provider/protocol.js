@@ -227,7 +227,7 @@ async function generateProviderRevise(transaction_id, revision_verb, modificatio
     const providerRevise = {
         transaction_id: transaction_id,
         challenge: challenge,
-        url_signature: await falcon.sign(null, Buffer.from(urlToken), keys.private),
+        url_signature: await falcon.sign(Buffer.from(urlToken), keys.private),
         revision_verb: revision_verb
     }
     
@@ -272,7 +272,9 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
             delete protocolState.tokenRevisionUrls[transaction_id]
             break
         case 'FINISH_MODIFICATION':
-            protocolState.tokens[transaction_id] = await signToken(modificationData.token)
+            if (modificationData.accept) {
+                protocolState.tokens[transaction_id] = utils.decryptToken(getToken(transaction_id), providerRevise.token)
+            }
             break
     }
 

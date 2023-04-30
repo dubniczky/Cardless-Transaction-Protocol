@@ -280,11 +280,11 @@ async function generateVendorRemediate(transaction_id, remediation_verb, modifie
     const token = getToken(transaction_id)
     switch (remediation_verb) {
         case 'REFRESH':
-            vendorRemediate.token = await utils.encryptToken(token, generateRefreshedToken(token))
+            vendorRemediate.token = utils.encryptToken(token, await generateRefreshedToken(token))
             break
         case 'MODIFY':
             vendorRemediate.modified_amount = modified_amount
-            vendorRemediate.token = await utils.encryptToken(token, generateModifiedToken(token, modified_amount))
+            vendorRemediate.token = utils.encryptToken(token, await generateModifiedToken(token, modified_amount))
             break
     }
 

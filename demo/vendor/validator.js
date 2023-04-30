@@ -1,5 +1,5 @@
 import utils from '../common/utils.js'
-import falcon from '../falcon.js'
+import falcon from '../common/falcon.js'
 import { protocolState, keys, getToken } from './protocolState.js'
 
 /**
