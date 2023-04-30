@@ -135,8 +135,8 @@ describe('Token modification', function () {
         assert.equal(vendorTokenBefore.transaction.recurring, null)
 
         assert.equal(vendorTokenAfter.transaction.amount, 2)
-        assert.equal(vendorTokenAfter.transaction.currency)
-        assert.equal(vendorTokenAfter.transaction.recurring)
+        assert.equal(vendorTokenAfter.transaction.currency, 'USD')
+        assert.equal(vendorTokenAfter.transaction.recurring, null)
         assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
         assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))
 
@@ -165,7 +165,7 @@ describe('Token modification', function () {
         assert.equal(vendorTokenBefore.transaction.recurring, null)
 
         assert.equal(vendorTokenAfter.transaction.amount, 2)
-        assert.equal(vendorTokenAfter.transaction.currency)
+        assert.equal(vendorTokenAfter.transaction.currency, 'USD')
         assert.equal(vendorTokenAfter.transaction.recurring, null)
         assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
         assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))

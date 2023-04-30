@@ -100,24 +100,6 @@ async function handleUserInput(url, vendorToken, port) {
 }
 
 /**
- * Generates `ProviderVerifChall` message
- * @param {string} t_id - The transaction ID related to the change request
- * @param {string} incommingChallenge - The challenge from the `VendorChall` message as a base64 string
- * @param {number} port - The port of the provider server 
- * @returns {Object} The `ProviderVerifChall` message
- */
-function generateProviderVerifChall(t_id, incommingChallenge, port) {
-    const challenge = utils.genChallenge(30)
-    protocolState.ongoing.challenges[t_id] = challenge
-    return {
-        success: true,
-        response: utils.signChall(incommingChallenge, keys.private),
-        challenge: challenge,
-        next_url: `stp://localhost:${port}/api/stp/change_next/${t_id}`
-    }
-}
-
-/**
  * Check whether the refreshed token is valid
  * @param {Object} oldToken - The previous token 
  * @param {Object} newToken - The refreshed token
@@ -246,30 +228,30 @@ function handleUnknownRemediationVerb(res) {
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns 
  */
-function generateProviderVerifNotify(transaction_id, challenge, vendorVerifChall, notify_verb, modificationData) {
-    if (!utils.verifyChallResponse(challenge, vendorVerifChall.response, getToken(transaction_id).signatures.vendor_key)) {
-        return {
-            success: false,
-            error_code: 'AUTH_FAILED',
-            error_message: 'The vendor\'s response to the challenge was not appropriate',
-        }
+function generateProviderRevise(transaction_id, revision_verb, modificationData) {
+    const challenge = utils.genChallenge(30)
+    const revisionUrl = protocolState.tokenNotifyUrls[transaction_id]
+    const urlToken = utils.cutIdFromUrl(revisionUrl)
+    const providerRevise = {
+        transaction_id: transaction_id,
+        challenge: challenge,
+        url_signature: crypto.sign(null, Buffer.from(urlToken), keys.private).toString('base64'),
+        revision_verb: revision_verb
+    }
+    
+    switch (revision_verb) {
+        case 'FINISH_MODIFICATION':
+            if (modificationData.accept) {
+                providerRevise.modification_status = 'ACCEPTED'
+                const modifiedFullToken = signToken(modificationData.token)
+                providerRevise.token = utils.objectToBase64(modifiedFullToken)
+            } else {
+                providerRevise.modification_status = 'REJECTED'
+            }
+            break
     }
 
-    const providerVerifNotify = {
-        success: true,
-        response: utils.signChall(vendorVerifChall.challenge, keys.private),
-        notify_verb: notify_verb
-    }
-    if (notify_verb == 'FINISH_MODIFICATION') {
-        if (modificationData.accept) {
-            providerVerifNotify.modification_status = 'ACCEPTED'
-            const modifiedFullToken = signToken(modificationData.token)
-            providerVerifNotify.token = utils.objectToBase64(modifiedFullToken)
-        } else {
-            providerVerifNotify.modification_status = 'REJECTED'
-        }
-    }
-    return providerVerifNotify
+    return providerRevise
 }
 
 /**
@@ -286,7 +268,7 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
     const revisionUrl = protocolState.tokenNotifyUrls[transaction_id]
     const vendorResponse = await utils.postStpRequest(revisionUrl, providerRevise)
 
-    utils.logMsg('VendorResponse', providerResponse)
+    utils.logMsg('VendorResponse', vendorResponse)
     let result = validator.checkVendorResponse(transaction_id, providerRevise.challenge, vendorResponse)
     if (result) {
         return result
@@ -307,6 +289,6 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
 
 
 export default {
-    sendProviderHello, handleUserInput, generateProviderVerifChall, handleRevokeRemediation, handleRefreshRemediation,
-    handleModificationRemediation, handleUnknownRemediationVerb, reviseToken
+    sendProviderHello, handleUserInput, handleRevokeRemediation, handleRefreshRemediation, handleModificationRemediation,
+    handleUnknownRemediationVerb, reviseToken
 }

@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 import { protocolState, getToken } from './protocolState.js'
 import utils from '../common/utils.js'
 
@@ -77,7 +79,7 @@ function checkVendorResponse(transaction_id, challenge, vendorResponse) {
     if (!vendorResponse.success) {
         return [ vendorResponse.error_code, vendorResponse.error_message ]
     }
-    if (!utils.verifyChallResponse(challenge, vendorResponse.response, getToken(transaction_id).signatures.provider_key)) {
+    if (!utils.verifyChallResponse(challenge, vendorResponse.response, getToken(transaction_id).signatures.vendor_key)) {
         return [ 'AUTH_FAILED', 'The vendor\'s signature of the challenge is not appropriate' ]
     }
 

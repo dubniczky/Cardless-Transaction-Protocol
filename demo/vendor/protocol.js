@@ -102,23 +102,6 @@ function sendVendorAck(req, res, uuid, port) {
 }
 
 /**
- * Responds to the `ProviderChall` with the `VendorVerifChall`
- * @param {Request} req - The `ProviderChall` request
- * @param {Response} res - The `VendorVerifChall` response
- * @param {number} port - The port of the vendor server 
- */
-function sendVendorVerifChall(req, res, port) {
-    const challenge = utils.genChallenge(30)
-    protocolState.ongoing.challenges[req.body.transaction_id] = challenge
-    res.send({
-        success: true,
-        response: utils.signChall(req.body.challenge, keys.private),
-        challenge: challenge,
-        next_url: `stp://localhost:${port}/api/stp/notify_next/${req.body.transaction_id}`
-    })
-}
-
-/**
  * Handles successful revoke notification
  * @param {Response} res - The `VendorAck` response 
  * @param {string} id - The transaction ID related to the notification
@@ -357,6 +340,5 @@ async function remediateToken(transaction_id, remediation_verb, modified_amount 
 
 export default {
     recurringOptionToPeriod, recurringPeriodToOption, generateNewTransactionUrl, sendVendorTokenMsg, waitAndSendRequestPin,
-    sendVendorAck, sendVendorVerifChall, handleRevokeRevision, handleFinishModifyRevision, handleUnknownRevision,
-    remediateToken
+    sendVendorAck, handleRevokeRevision, handleFinishModifyRevision, handleUnknownRevision, remediateToken
 }
