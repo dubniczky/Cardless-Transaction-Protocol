@@ -95,7 +95,7 @@ async function handleUserInput(url, vendorToken, port) {
     }
 
     protocolState.tokens[token.transaction.id] = token
-    protocolState.tokenNotifyUrls[token.transaction.id] = vendorAck.revision_url
+    protocolState.tokenRevisionUrls[token.transaction.id] = vendorAck.revision_url
     return [ null, null ]
 }
 
@@ -126,13 +126,13 @@ function isRefreshedTokenValid(oldToken, newToken) {
 }
 
 /**
- * Handles successful revoke change request
- * @param {Response} res - The `ProviderAck` response 
- * @param {string} id - The transaction ID related to the change request
+ * Handles successful revoke token remediation
+ * @param {Request} req - The `VendorRemediate` request
+ * @param {Response} res - The `ProviderResponse` response
  */
 function handleRevokeRemediation(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
-    delete protocolState.tokenNotifyUrls[req.body.transaction_id]
+    delete protocolState.tokenRevisionUrls[req.body.transaction_id]
     res.send({
         success: true,
         response: utils.signChall(req.body.challenge, keys.private)
@@ -140,10 +140,9 @@ function handleRevokeRemediation(req, res) {
 }
 
 /**
- * Handles successful refresh change request
- * @param {Response} res - The `ProviderAck` response 
- * @param {string} id - The transaction ID related to the change request
- * @param {string} base64Token - The refreshed vendor STP token as a base64 string
+ * Handles successful refresh token remediation
+ * @param {Request} req - The `VendorRemediate` request
+ * @param {Response} res - The `ProviderResponse` response
  */
 function handleRefreshRemediation(req, res) {
     const token = utils.base64ToObject(req.body.token)
@@ -164,13 +163,9 @@ function handleRefreshRemediation(req, res) {
 }
 
 /**
- * Handles successful modification change request
- * @param {Response} res - The `ProviderAck` response 
- * @param {string} id - The transaction ID related to the change request
- * @param {string} base64Token - The refreshed vendor STP token as a base64 string
- * @param {Object?} modificationData - The modification data
- * @param {boolean} modificationData.accept - Whether the modification was accepted 
- * @param {Object} modificationData.token - The modified JWT token signed by the vendor
+ * Handles successful modification token remediation
+ * @param {Request} req - The `VendorRemediate` request
+ * @param {Response} res - The `ProviderResponse` response
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
 function handleModificationRemediation(req, res, instantlyAcceptModify) {
@@ -206,31 +201,29 @@ function handleModificationRemediation(req, res, instantlyAcceptModify) {
 }
 
 /**
- * Handles unknown change verb
- * @param {Response} res - The `ProviderAck` response
+ * Handles unknown remediation verb
+ * @param {Response} res - The `ProviderResponse` response
  */
 function handleUnknownRemediationVerb(res) {
     res.send({
         success: false,
-        error_code: 'UNKNOWN_CHANGE_VERB',
-        error_message: 'Unsupported change_verb'
+        error_code: 'UNKNOWN_REMEDIATION_VERB',
+        error_message: 'Unsupported remediation_verb'
     })
 }
 
 /**
- * Generates `ProviderVerifNotify` message
- * @param {string} transaction_id - The transaction ID related to the notification
- * @param {string} challenge - The challenge (that was signed in the `VendorVerifChall` message) as a base64 string
- * @param {Object} vendorVerifChall - The `VendorVerifChall` message
- * @param {string} notify_verb - The notification verb. Now implemented: REVOKE, FINISH_MODIFICATION
+ * Generates `ProviderRevise` message
+ * @param {string} transaction_id - The transaction ID related to the revision
+ * @param {string} revision_verb - The revision verb. Now implemented: REVOKE, FINISH_MODIFICATION
  * @param {Object?} modificationData - The modification data
  * @param {boolean} modificationData.accept - Whether the modification was accepted 
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
- * @returns 
+ * @returns {Object} The `ProviderRevise` message
  */
 function generateProviderRevise(transaction_id, revision_verb, modificationData) {
     const challenge = utils.genChallenge(30)
-    const revisionUrl = protocolState.tokenNotifyUrls[transaction_id]
+    const revisionUrl = protocolState.tokenRevisionUrls[transaction_id]
     const urlToken = utils.cutIdFromUrl(revisionUrl)
     const providerRevise = {
         transaction_id: transaction_id,
@@ -255,17 +248,17 @@ function generateProviderRevise(transaction_id, revision_verb, modificationData)
 }
 
 /**
- * Make a notification for a given token
+ * Make a token revision for a given token
  * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
- * @param {string} notify_verb - The notification verb. Now implemented: REVOKE, FINISH_MODIFICATION
+ * @param {string} revision_verb - The revision verb. Now implemented: REVOKE, FINISH_MODIFICATION
  * @param {Object?} modificationData - The modification data
  * @param {boolean} modificationData.accept - Whether the modification was accepted 
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
- * @returns {[string?, string?]} The result of the notification. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
+ * @returns {[string?, string?]} The result of the revision. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function reviseToken(transaction_id, revision_verb, modificationData = null) {
     const providerRevise = generateProviderRevise(transaction_id, revision_verb, modificationData)
-    const revisionUrl = protocolState.tokenNotifyUrls[transaction_id]
+    const revisionUrl = protocolState.tokenRevisionUrls[transaction_id]
     const vendorResponse = await utils.postStpRequest(revisionUrl, providerRevise)
 
     utils.logMsg('VendorResponse', vendorResponse)
@@ -277,7 +270,7 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
     switch (revision_verb) {
         case 'REVOKE':
             delete protocolState.tokens[transaction_id]
-            delete protocolState.tokenNotifyUrls[transaction_id]
+            delete protocolState.tokenRevisionUrls[transaction_id]
             break
         case 'FINISH_MODIFICATION':
             protocolState.tokens[transaction_id] = signToken(modificationData.token)

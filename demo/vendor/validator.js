@@ -74,19 +74,22 @@ function isTokenRecurring(res, id) {
  * @returns {boolean} Whether the `ProviderTokenMsg` message is correct
  */
 function checkProviderTokenMsg(req, res) {
-    if (!utils.validateRes(res, req.body.allowed, 'TRANSACTION_DECLINED', 'The transaction was declined by the user')) {
-        return false
-    }
-
-    if (!utils.validateRes(res, req.body.token, 'TOKEN_NOT_FOUND', 'The transaction token is not found')) {
-        return false
-    }
-
     const token = utils.base64ToObject(req.body.token)
-    return utils.validateRes(res, utils.verifyProviderSignatureOfToken(token),
-        'TOKEN_INVALID', 'The transaction token has an invalid provider signature')
+    return  utils.validateRes(res, req.body.allowed,
+                'TRANSACTION_DECLINED', 'The transaction was declined by the user') &&
+            utils.validateRes(res, req.body.token,
+                'TOKEN_NOT_FOUND', 'The transaction token is not found') &&
+            utils.validateRes(res, utils.verifyProviderSignatureOfToken(token),
+                'TOKEN_INVALID', 'The transaction token has an invalid provider signature')
 }
 
+/**
+ * Validates if the `ProviderRevise` message is correct 
+ * @param {Request} req - The `ProviderRevise` request
+ * @param {Response} res - The `VendorResponse` response 
+ * @param {string} uuid - The UUID form the request URL
+ * @returns {boolean} Whether the `ProviderRevise` message is correct
+ */
 function checkProviderRevise(req, res, uuid) {
     return  doesTokenExist(res, req.body.transaction_id) &&
             utils.validateRes(res,
@@ -98,10 +101,11 @@ function checkProviderRevise(req, res, uuid) {
                 'INVALID_SIGNATURE',
                 'url_signature is not a valid signature of the provider')
 }
-
 /**
- * Validates if the `ProviderVerifChall` message is correct
- * @param {Object} providerVerifChall - The `ProviderVerifChall` message
+ * Validates if the `ProviderResponse` message is correct
+ * @param {string} transaction_id - The ID of the token related to the revision
+ * @param {string} challenge - The challenge, which is signed by the provider in the `ProviderResponse` message as a base64 string
+ * @param {Object} providerResponse - The `ProviderResponse` message
  * @returns {[string, string]?} `[error_code, error_message]` if not correct, otherwise `null`
  */
 function checkProviderResponse(transaction_id, challenge, providerResponse) {

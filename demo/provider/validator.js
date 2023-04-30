@@ -54,6 +54,13 @@ function checkUserInput(req, res, transaction, vendorToken) {
                 'INCORRECT_SIGNATURE', 'The vendor signature of the token is incorrect')
 }
 
+/**
+ * Validates if the `VendorRemediate` message is correct 
+ * @param {Request} req - The `VendorRemediate` request
+ * @param {Response} res - The `ProviderResponse` response 
+ * @param {string} uuid - The UUID form the request URL
+ * @returns {boolean} Whether the `VendorRemediate` message is correct
+ */
 function checkVendorRemediate(req, res, uuid) {
     return  doesTokenExist(res, req.body.transaction_id) &&
             utils.validateRes(res,
@@ -67,9 +74,10 @@ function checkVendorRemediate(req, res, uuid) {
 }
 
 /**
- * Validates if the `VendorAck` message is correct
- * @param {Object} vendorAck - The `VendorAck` message
- * @param {Object} providerVerifNotify - The `ProviderVerifNotify` message
+ * Validates if the `VendorResponse` message is correct
+ * @param {string} transaction_id - The ID of the token related to the revision
+ * @param {string} challenge - The challenge, which is signed by the vendor in the `VendorResponse` message as a base64 string
+ * @param {Object} vendorResponse - The `VendorResponse` message
  * @returns {[string, string]?} `[error_code, error_message]` if not correct, otherwise `null`
  */
 function checkVendorResponse(transaction_id, challenge, vendorResponse) {

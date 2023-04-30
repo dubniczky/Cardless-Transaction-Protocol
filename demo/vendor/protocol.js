@@ -93,7 +93,7 @@ function sendVendorAck(req, res, uuid, port) {
     delete protocolState.ongoing.responses[uuid]
     const token = utils.base64ToObject(req.body.token)
     protocolState.tokens[token.transaction.id] = token
-    protocolState.tokenChangeUrls[token.transaction.id] = req.body.remediation_url
+    protocolState.tokenRemediationUrls[token.transaction.id] = req.body.remediation_url
     console.log('Transaction token:', token)
     res.send({
         success: true,
@@ -102,13 +102,13 @@ function sendVendorAck(req, res, uuid, port) {
 }
 
 /**
- * Handles successful revoke notification
- * @param {Response} res - The `VendorAck` response 
- * @param {string} id - The transaction ID related to the notification
+ * Handles successful revoke token revision
+ * @param {Request} req - The `ProviderRevise` request 
+ * @param {Response} res - The `VendorResponse` response 
  */
 function handleRevokeRevision(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
-    delete protocolState.tokenChangeUrls[req.body.transaction_id]
+    delete protocolState.tokenRemediationUrls[req.body.transaction_id]
     res.send({
         success: true,
         response: utils.signChall(req.body.challenge, keys.private)
@@ -116,10 +116,9 @@ function handleRevokeRevision(req, res) {
 }
 
 /**
- * Handles successful finished modification notification
- * @param {Request} req - The `ProviderVerifNotify` request
- * @param {Response} res - The `VendorAck` response
- * @param {string} id - The transaction ID related to the notification
+ * Handles successful finished modification token revision
+ * @param {Request} req - The `ProviderRevise` request 
+ * @param {Response} res - The `VendorResponse` response
  */
 function handleFinishModifyRevision(req, res) {
     if (req.body.modification_status == 'ACCEPTED') {
@@ -132,14 +131,14 @@ function handleFinishModifyRevision(req, res) {
 }
 
 /**
- * Handles unknown notification verb
- * @param {Response} res - The `VendorAck` response
+ * Handles unknown revision verb
+ * @param {Response} res - The `VendorResponse` response 
  */
 function handleUnknownRevision(res) {
     res.send({
         success: false,
-        error_code: 'UNKNOWN_NOTIFY_VERB',
-        error_message: 'Unsupported notify_verb'
+        error_code: 'UNKNOWN_REVISION_VERB',
+        error_message: 'Unsupported revision_verb'
     })
 }
 
@@ -222,10 +221,7 @@ function generateRefreshedToken(token) {
 /**
  * Generates the modified token
  * @param {Object} token - The original token 
- * @param {Object} modificationData - The modification data
- * @param {number} modificationData.amount - The amount of the modification 
- * @param {string} modificationData.currency - The currency code of the modification
- * @param {string?} modificationData.period - The recurrance period of the modification. One of: null, monthly, quarterly, annual
+ * @param {number} modified_amount - The modified amount in the new token
  * @returns {Object} The modified token
  */
 function generateModifiedToken(token, modified_amount) {
@@ -243,7 +239,7 @@ function generateModifiedToken(token, modified_amount) {
  * @param {number} transactionData.amount - The amount of the transaction 
  * @param {string} transactionData.currency - The currency code of the transaction
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
- * @returns {Object} The `VendroToken` message
+ * @returns {Object} The `VendorToken` message
  */
 function generateVendorTokenMsg(transId, port, token, transactionData) {
     return {
@@ -264,10 +260,16 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
     }
 }
 
-
+/**
+* Generates `VendorRemediate` message
+ * @param {string} transaction_id - The transaction ID related to the remediation
+ * @param {string} remediation_verb - The remediation verb. Now implemented: REVOKE, REFRESH, MODIFY
+ * @param {number?} modified_amount - The modified amount in the new token
+ * @returns {Object} The `VendorRemediate` message
+ */
 function generateVendorRemediate(transaction_id, remediation_verb, modified_amount) {
     const challenge = utils.genChallenge(30)
-    const remediationUrl = protocolState.tokenChangeUrls[transaction_id]
+    const remediationUrl = protocolState.tokenRemediationUrls[transaction_id]
     const urlToken = utils.cutIdFromUrl(remediationUrl)
     const vendorRemediate = {
         transaction_id: transaction_id,
@@ -291,16 +293,16 @@ function generateVendorRemediate(transaction_id, remediation_verb, modified_amou
 }
 
 /**
- * Handles a successful change request. Should be called after all checks were made
- * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
- * @param {Object} providerAck - The `ProviderAck` message
- * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE, MODIFY
+ * Handles a successful token remediation. Should be called after all checks were made
+ * @param {string} transaction_id - The ID of the transaction token associated with the remediation
+ * @param {Object} providerResponse - The `ProviderResponse` message
+ * @param {string} remediation_verb - The remediation verb. One of: REFRESH, REVOKE, MODIFY
  */
 function handleSuccessfulRemediation(transaction_id, providerResponse, remediation_verb) {
     switch (remediation_verb) {
         case 'REVOKE':
             delete protocolState.tokens[transaction_id]
-            delete protocolState.tokenChangeUrls[transaction_id]
+            delete protocolState.tokenRemediationUrls[transaction_id]
             break
         case 'REFRESH':
             protocolState.tokens[transaction_id] = utils.base64ToObject(providerResponse.token)
@@ -314,18 +316,15 @@ function handleSuccessfulRemediation(transaction_id, providerResponse, remediati
 }
 
 /**
- * Make a change request for a given token
- * @param {string} transaction_id - The ID of the transaction token. Format: bic_id
- * @param {string} change_verb - The change verb. One of: REFRESH, REVOKE, MODIFY
- * @param {Object?} modificationData - The modification data
- * @param {number} modificationData.amount - The amount of the modification 
- * @param {string} modificationData.currency - The currency code of the modification
- * @param {string?} modificationData.period - The recurrance period of the modification. One of: null, monthly, quarterly, annual
- * @returns {[string?, string?]} The result of the change request. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
+ * Make a token remediation for a given token
+ * @param {string} transaction_id - The ID of the transaction toke
+ * @param {string} remediation_verb - The remediation verb. One of: REFRESH, REVOKE, MODIFY
+ * @param {number?} modified_amount - The modified amount in the new token
+ * @returns {[string?, string?]} The result of the token remediation. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function remediateToken(transaction_id, remediation_verb, modified_amount = null) {
     const vendorRemediate = generateVendorRemediate(transaction_id, remediation_verb, modified_amount)
-    const remediationUrl = protocolState.tokenChangeUrls[transaction_id]
+    const remediationUrl = protocolState.tokenRemediationUrls[transaction_id]
     const providerResponse = await utils.postStpRequest(remediationUrl, vendorRemediate)
 
     utils.logMsg('ProviderResponse', providerResponse)

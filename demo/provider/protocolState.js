@@ -7,7 +7,7 @@ export const protocolState = {
         modifications: []
     },
     tokens: {},
-    tokenNotifyUrls: {}
+    tokenRevisionUrls: {}
 }
 
 export const keys = {

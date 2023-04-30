@@ -8,7 +8,7 @@ export const protocolState = {
         requestPins: {}
     },
     tokens: {},
-    tokenChangeUrls: {}
+    tokenRemediationUrls: {}
 }
 
 export const keys = {
