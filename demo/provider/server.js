@@ -52,7 +52,7 @@ app.post('/verify', async (req, res) => {
 
     const transaction = popOngoingTransaction(req.body.t_id)
     const vendorToken = utils.base64ToObject(transaction.token)
-    if (!validator.checkUserInput(req, res, transaction, vendorToken)) {
+    if (!(await validator.checkUserInput(req, res, transaction, vendorToken))) {
         return
     }
 
@@ -80,19 +80,19 @@ app.post('/set_accept_modify', async (req, res) => {
 app.post('/api/stp/remediation/:uuid', async (req, res) => {
     const uuid = req.params.uuid
     utils.logMsg('VendorRemediate', req.body)
-    if (!validator.checkVendorRemediate(req, res, uuid)) {
+    if (!(await validator.checkVendorRemediate(req, res, uuid))) {
         return
     }
 
     switch (req.body.remediation_verb) {
         case 'REVOKE':
-            protocol.handleRevokeRemediation(req, res)
+            await protocol.handleRevokeRemediation(req, res)
             break
         case 'REFRESH':
-            protocol.handleRefreshRemediation(req, res)
+            await protocol.handleRefreshRemediation(req, res)
             break
         case 'MODIFY':
-            protocol.handleModificationRemediation(req, res, instantlyAcceptModify)
+            await protocol.handleModificationRemediation(req, res, instantlyAcceptModify)
             break
         default:
             protocol.handleUnknownRemediationVerb(res)

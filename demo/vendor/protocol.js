@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import utils from '../common/utils.js'
+import falcon from '../common/falcon.js'
 import validator from './validator.js'
 import { protocolState, keys, popOngoingRequest, popOngoingRequestPin, getToken } from './protocolState.js'
 
@@ -51,13 +52,13 @@ function generateNewTransactionUrl(req) {
  * @param {string} uuid - The UUID of the incomming STP URL
  * @param {number} port - The port of the vendor server 
  */
-function sendVendorTokenMsg(req, res, uuid, port) {
+async function sendVendorTokenMsg(req, res, uuid, port) {
     protocolState.ongoing.requestPins[uuid] = req.body.verification_pin
     const currReq = popOngoingRequest(uuid)
     const transId = crypto.randomUUID()
     protocolState.ongoing.responses[transId] = true
 
-    const token = generateVendorToken(req.body, currReq)
+    const token = await generateVendorToken(req.body, currReq)
     const respMessage = generateVendorTokenMsg(transId, port, token, currReq)
     res.send(respMessage)
 }
@@ -106,12 +107,12 @@ function sendVendorAck(req, res, uuid, port) {
  * @param {Request} req - The `ProviderRevise` request 
  * @param {Response} res - The `VendorResponse` response 
  */
-function handleRevokeRevision(req, res) {
+async function handleRevokeRevision(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
     delete protocolState.tokenRemediationUrls[req.body.transaction_id]
     res.send({
         success: true,
-        response: utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, keys.private)
     })
 }
 
@@ -120,13 +121,13 @@ function handleRevokeRevision(req, res) {
  * @param {Request} req - The `ProviderRevise` request 
  * @param {Response} res - The `VendorResponse` response
  */
-function handleFinishModifyRevision(req, res) {
+async function handleFinishModifyRevision(req, res) {
     if (req.body.modification_status == 'ACCEPTED') {
         protocolState.tokens[req.body.transaction_id] = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
     }
     res.send({
         success: true,
-        response: utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, keys.private)
     })
 }
 
@@ -147,23 +148,21 @@ function handleUnknownRevision(res) {
  * @param {Object} transaction - The transaction data in an object
  * @returns {Object} The vendor STP token (metadata, transaction, vendor signatures)
  */
-function constructAndSignToken(transaction) {
+async function constructAndSignToken(transaction) {
     let token = {
         metadata: {
             version: 1,
             alg: 'sha512',
             enc: 'sha512,aes256',
-            sig: 'rsa2048'
+            sig: 'falcon1024,ed25519'
         },
         transaction: transaction
     }
 
-    let signer = crypto.createSign('SHA512')
-    signer.update(Buffer.from(JSON.stringify(token)))
-    const signature = signer.sign(keys.private)
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), keys.private)
     token.signatures = {
-        vendor: signature.toString('base64'),
-        vendor_key: utils.pemKeyToRawKeyStr(keys.public)
+        vendor: signature,
+        vendor_key: await falcon.exportKeyToToken(keys.public)
     }
 
     return token
@@ -180,7 +179,7 @@ function constructAndSignToken(transaction) {
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
  * @returns {Object} The vendor STP token (metadata, transaction, vendor signatures)
  */
-function generateVendorToken(reqBody, transactionData) {
+async function generateVendorToken(reqBody, transactionData) {
     let transaction = {
         id: reqBody.transaction_id,
         expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
@@ -199,7 +198,7 @@ function generateVendorToken(reqBody, transactionData) {
         transaction.recurring = null
     }
 
-    return constructAndSignToken(transaction)
+    return await constructAndSignToken(transaction)
 }
 
 /**
@@ -207,7 +206,7 @@ function generateVendorToken(reqBody, transactionData) {
  * @param {Object} token - The original token
  * @returns {Object} The refreshed token
  */
-function generateRefreshedToken(token) {
+async function generateRefreshedToken(token) {
     let transaction = JSON.parse(JSON.stringify(token.transaction))
     transaction.expiry = 
         utils.getNextRecurrance(transaction.expiry, transaction.recurring.period)
@@ -215,7 +214,7 @@ function generateRefreshedToken(token) {
         utils.getNextRecurrance(transaction.recurring.next, transaction.recurring.period)
     transaction.recurring.index += 1
     
-    return constructAndSignToken(transaction) 
+    return await constructAndSignToken(transaction) 
 }
 
 /**
@@ -224,10 +223,10 @@ function generateRefreshedToken(token) {
  * @param {number} modified_amount - The modified amount in the new token
  * @returns {Object} The modified token
  */
-function generateModifiedToken(token, modified_amount) {
+async function generateModifiedToken(token, modified_amount) {
     let transaction = JSON.parse(JSON.stringify(token.transaction))
     transaction.amount = modified_amount
-    return constructAndSignToken(transaction)
+    return await constructAndSignToken(transaction)
 }
 
 /**
@@ -267,25 +266,25 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
  * @param {number?} modified_amount - The modified amount in the new token
  * @returns {Object} The `VendorRemediate` message
  */
-function generateVendorRemediate(transaction_id, remediation_verb, modified_amount) {
+async function generateVendorRemediate(transaction_id, remediation_verb, modified_amount) {
     const challenge = utils.genChallenge(30)
     const remediationUrl = protocolState.tokenRemediationUrls[transaction_id]
     const urlToken = utils.cutIdFromUrl(remediationUrl)
     const vendorRemediate = {
         transaction_id: transaction_id,
         challenge: challenge,
-        url_signature: crypto.sign(null, Buffer.from(urlToken), keys.private).toString('base64'),
+        url_signature: await falcon.sign(Buffer.from(urlToken), keys.private),
         remediation_verb: remediation_verb
     }
     
     const token = getToken(transaction_id)
     switch (remediation_verb) {
         case 'REFRESH':
-            vendorRemediate.token = utils.encryptToken(token, generateRefreshedToken(token))
+            vendorRemediate.token = await utils.encryptToken(token, generateRefreshedToken(token))
             break
         case 'MODIFY':
             vendorRemediate.modified_amount = modified_amount
-            vendorRemediate.token = utils.encryptToken(token, generateModifiedToken(token, modified_amount))
+            vendorRemediate.token = await utils.encryptToken(token, generateModifiedToken(token, modified_amount))
             break
     }
 
@@ -323,12 +322,12 @@ function handleSuccessfulRemediation(transaction_id, providerResponse, remediati
  * @returns {[string?, string?]} The result of the token remediation. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function remediateToken(transaction_id, remediation_verb, modified_amount = null) {
-    const vendorRemediate = generateVendorRemediate(transaction_id, remediation_verb, modified_amount)
+    const vendorRemediate = await generateVendorRemediate(transaction_id, remediation_verb, modified_amount)
     const remediationUrl = protocolState.tokenRemediationUrls[transaction_id]
     const providerResponse = await utils.postStpRequest(remediationUrl, vendorRemediate)
 
     utils.logMsg('ProviderResponse', providerResponse)
-    let result = validator.checkProviderResponse(transaction_id, vendorRemediate.challenge, providerResponse)
+    let result = await validator.checkProviderResponse(transaction_id, vendorRemediate.challenge, providerResponse)
     if (result) {
         return result
     }

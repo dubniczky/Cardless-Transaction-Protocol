@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import utils from '../common/utils.js'
+import falcon from '../common/falcon.js'
 import { protocolState, keys,  getToken } from './protocolState.js'
 import validator from './validator.js'
 
@@ -9,11 +10,11 @@ import validator from './validator.js'
  * @param {string} url - The URL, where the message will be sent
  * @returns {Object} The `ProviderHello` message
  */
-function generateProviderHelloMsg(url) {
+async function generateProviderHelloMsg(url) {
     const pin = crypto.randomInt(1000, 10000)
     const t_id = 'STPEXPROV_' + crypto.randomInt(10 ** 9, 10 ** 10)
     const url_token = utils.cutIdFromUrl(url)
-    const url_signature = crypto.sign(null, Buffer.from(url_token), keys.private).toString('base64')
+    const url_signature = await falcon.sign(Buffer.from(url_token), keys.private)
     return {
         version: 'v1',
         bank_name: 'STP_Example_Provider',
@@ -31,7 +32,7 @@ function generateProviderHelloMsg(url) {
  * @returns {[Object?, string?, string?]} `[ VendorToken, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
 async function sendProviderHello(url) {
-    const providerHello = generateProviderHelloMsg(url)
+    const providerHello = await generateProviderHelloMsg(url)
     const vendorToken = await utils.postStpRequest(url, providerHello)
     utils.logMsg('VendorToken', vendorToken)
     if (vendorToken.HTTP_error_code) {
@@ -56,14 +57,12 @@ async function sendProviderHello(url) {
  * @param {Object} token - The vendor STP token
  * @returns {Object} The full STP token
  */
-function signToken(token) {
-    let signer = crypto.createSign('SHA512')
-    signer.update(Buffer.from(JSON.stringify(token)))
-    const signature = signer.sign(keys.private)
+async function signToken(token) {
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), keys.private)
 
     let signedToken = utils.copyObject(token)
-    signedToken.signatures.provider = signature.toString('base64')
-    signedToken.signatures.provider_key = utils.pemKeyToRawKeyStr(keys.public)
+    signedToken.signatures.provider = signature
+    signedToken.signatures.provider_key = await falcon.exportKeyToToken(keys.public)
     return signedToken
 }
 
@@ -75,7 +74,7 @@ function signToken(token) {
  * @returns {[string?, string?]} `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function handleUserInput(url, vendorToken, port) {
-    const token = signToken(vendorToken)
+    const token = await signToken(vendorToken)
     const providerTokenMsg = {
         allowed: true,
         token: utils.objectToBase64(token),
@@ -130,12 +129,12 @@ function isRefreshedTokenValid(oldToken, newToken) {
  * @param {Request} req - The `VendorRemediate` request
  * @param {Response} res - The `ProviderResponse` response
  */
-function handleRevokeRemediation(req, res) {
+async function handleRevokeRemediation(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
     delete protocolState.tokenRevisionUrls[req.body.transaction_id]
     res.send({
         success: true,
-        response: utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, keys.private)
     })
 }
 
@@ -144,20 +143,20 @@ function handleRevokeRemediation(req, res) {
  * @param {Request} req - The `VendorRemediate` request
  * @param {Response} res - The `ProviderResponse` response
  */
-function handleRefreshRemediation(req, res) {
+async function handleRefreshRemediation(req, res) {
     const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
     if (!utils.validateRes(res, isRefreshedTokenValid(getToken(req.body.transaction_id), token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
-        !utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
+        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
             'INCORRECT_TOKEN_SIGN', 'The refreshed token is not signed properly')) {
         return
     }
 
-    const fullToken = signToken(token)
+    const fullToken = await signToken(token)
     protocolState.tokens[req.body.transaction_id] = fullToken
     res.send({
         success: true,
-        response: utils.signChall(req.body.challenge, keys.private),
+        response: await utils.signChall(req.body.challenge, keys.private),
         token: utils.objectToBase64(fullToken)
     })
 }
@@ -168,19 +167,19 @@ function handleRefreshRemediation(req, res) {
  * @param {Response} res - The `ProviderResponse` response
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
-function handleModificationRemediation(req, res, instantlyAcceptModify) {
+async function handleModificationRemediation(req, res, instantlyAcceptModify) {
     const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
-    if (!utils.validateRes(res, utils.verifyVendorSignatureOfToken(token),
+    if (!utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
         'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
         return
     }
 
     if (instantlyAcceptModify) {
-        const fullToken = signToken(token)
+        const fullToken = await signToken(token)
         protocolState.tokens[req.body.transaction_id] = fullToken
         res.send({
             success: true,
-            response: utils.signChall(req.body.challenge, keys.private),
+            response: await utils.signChall(req.body.challenge, keys.private),
             modification_status: 'ACCEPTED',
             token: utils.objectToBase64(fullToken)
         })
@@ -194,7 +193,7 @@ function handleModificationRemediation(req, res, instantlyAcceptModify) {
         })
         res.send({
             success: true,
-            response: utils.signChall(req.body.challenge, keys.private),
+            response: await utils.signChall(req.body.challenge, keys.private),
             modification_status: 'PENDING'
         })
     }
@@ -221,14 +220,14 @@ function handleUnknownRemediationVerb(res) {
  * @param {Object} modificationData.token - The modified JWT token signed by the vendor
  * @returns {Object} The `ProviderRevise` message
  */
-function generateProviderRevise(transaction_id, revision_verb, modificationData) {
+async function generateProviderRevise(transaction_id, revision_verb, modificationData) {
     const challenge = utils.genChallenge(30)
     const revisionUrl = protocolState.tokenRevisionUrls[transaction_id]
     const urlToken = utils.cutIdFromUrl(revisionUrl)
     const providerRevise = {
         transaction_id: transaction_id,
         challenge: challenge,
-        url_signature: crypto.sign(null, Buffer.from(urlToken), keys.private).toString('base64'),
+        url_signature: await falcon.sign(null, Buffer.from(urlToken), keys.private),
         revision_verb: revision_verb
     }
     
@@ -236,7 +235,7 @@ function generateProviderRevise(transaction_id, revision_verb, modificationData)
         case 'FINISH_MODIFICATION':
             if (modificationData.accept) {
                 providerRevise.modification_status = 'ACCEPTED'
-                const modifiedFullToken = signToken(modificationData.token)
+                const modifiedFullToken = await signToken(modificationData.token)
                 providerRevise.token = utils.encryptToken(getToken(transaction_id), modifiedFullToken)
             } else {
                 providerRevise.modification_status = 'REJECTED'
@@ -257,12 +256,12 @@ function generateProviderRevise(transaction_id, revision_verb, modificationData)
  * @returns {[string?, string?]} The result of the revision. `[ null, null ]` if the no errors, `[ err_code, err_msg ]` otherwise
  */
 async function reviseToken(transaction_id, revision_verb, modificationData = null) {
-    const providerRevise = generateProviderRevise(transaction_id, revision_verb, modificationData)
+    const providerRevise = await generateProviderRevise(transaction_id, revision_verb, modificationData)
     const revisionUrl = protocolState.tokenRevisionUrls[transaction_id]
     const vendorResponse = await utils.postStpRequest(revisionUrl, providerRevise)
 
     utils.logMsg('VendorResponse', vendorResponse)
-    let result = validator.checkVendorResponse(transaction_id, providerRevise.challenge, vendorResponse)
+    let result = await validator.checkVendorResponse(transaction_id, providerRevise.challenge, vendorResponse)
     if (result) {
         return result
     }
@@ -273,7 +272,7 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
             delete protocolState.tokenRevisionUrls[transaction_id]
             break
         case 'FINISH_MODIFICATION':
-            protocolState.tokens[transaction_id] = signToken(modificationData.token)
+            protocolState.tokens[transaction_id] = await signToken(modificationData.token)
             break
     }
 

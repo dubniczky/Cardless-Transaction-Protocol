@@ -18,8 +18,8 @@ describe('Token negotiation', function () {
         assert.equal(tokenAtProvider.transaction.amount, 1)
         assert.equal(tokenAtProvider.transaction.currency, 'USD')
         assert.equal(tokenAtProvider.transaction.recurring, null)
-        assert.ok(utils.verifyVendorSignatureOfToken(tokenAtProvider))
-        assert.ok(utils.verifyProviderSignatureOfToken(tokenAtProvider))
+        assert.ok(await utils.verifyVendorSignatureOfToken(tokenAtProvider))
+        assert.ok(await utils.verifyProviderSignatureOfToken(tokenAtProvider))
     })
 
     test('Recurring token', async function (vendorTab, providerTab) {
@@ -37,8 +37,8 @@ describe('Token negotiation', function () {
         assert.notEqual(tokenAtProvider.transaction.recurring, null)
         assert.equal(tokenAtProvider.transaction.recurring.period, 'monthly')
         assert.equal(tokenAtProvider.transaction.recurring.index, 0)
-        assert.ok(utils.verifyVendorSignatureOfToken(tokenAtProvider))
-        assert.ok(utils.verifyProviderSignatureOfToken(tokenAtProvider))
+        assert.ok(await utils.verifyVendorSignatureOfToken(tokenAtProvider))
+        assert.ok(await utils.verifyProviderSignatureOfToken(tokenAtProvider))
     })
 })
 
@@ -107,8 +107,8 @@ describe('Token refreshing', function () {
         assert.notEqual(vendorTokenAfter.transaction.recurring, null)
         assert.equal(vendorTokenAfter.transaction.recurring.period, 'quarterly')
         assert.equal(vendorTokenAfter.transaction.recurring.index, 1)
-        assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
-        assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyVendorSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyProviderSignatureOfToken(vendorTokenAfter))
 
         assert.deepEqual(vendorTokenAfter, providerTokenAfter)
     })
@@ -137,8 +137,8 @@ describe('Token modification', function () {
         assert.equal(vendorTokenAfter.transaction.amount, 2)
         assert.equal(vendorTokenAfter.transaction.currency, 'USD')
         assert.equal(vendorTokenAfter.transaction.recurring, null)
-        assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
-        assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyVendorSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyProviderSignatureOfToken(vendorTokenAfter))
 
         assert.deepEqual(vendorTokenAfter, providerTokenAfter)
     })
@@ -167,8 +167,8 @@ describe('Token modification', function () {
         assert.equal(vendorTokenAfter.transaction.amount, 2)
         assert.equal(vendorTokenAfter.transaction.currency, 'USD')
         assert.equal(vendorTokenAfter.transaction.recurring, null)
-        assert.ok(utils.verifyVendorSignatureOfToken(vendorTokenAfter))
-        assert.ok(utils.verifyProviderSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyVendorSignatureOfToken(vendorTokenAfter))
+        assert.ok(await utils.verifyProviderSignatureOfToken(vendorTokenAfter))
 
         assert.deepEqual(vendorTokenAfter, providerTokenAfter)
     })

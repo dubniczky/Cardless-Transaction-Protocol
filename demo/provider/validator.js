@@ -1,7 +1,6 @@
-import crypto from 'crypto'
-
-import { protocolState, getToken } from './protocolState.js'
 import utils from '../common/utils.js'
+import falcon from '../common/falcon.js'
+import { protocolState, getToken } from './protocolState.js'
 
 /**
  * Validates if a given ongoing transaction negotiation exists
@@ -45,12 +44,12 @@ function doesTokenExist(res, id) {
  * @param {Object} vendorToken - The vendor STP token
  * @returns {boolean} Whether user input is correct
  */
-function checkUserInput(req, res, transaction, vendorToken) {
+async function checkUserInput(req, res, transaction, vendorToken) {
     return  utils.validateRes(res, req.body.decision === 'accept',
                 'USER_DECLINED', 'The user declined the transaction', 'allowed') &&
             utils.validateRes(res, req.body.pin !== transaction.pin,
                 'INCORRECT_PIN', 'The user entered an incorrect pin', 'allowed') &&
-            utils.validateRes(res, utils.verifyVendorSignatureOfToken(vendorToken),
+            utils.validateRes(res, await utils.verifyVendorSignatureOfToken(vendorToken),
                 'INCORRECT_SIGNATURE', 'The vendor signature of the token is incorrect')
 }
 
@@ -61,13 +60,12 @@ function checkUserInput(req, res, transaction, vendorToken) {
  * @param {string} uuid - The UUID form the request URL
  * @returns {boolean} Whether the `VendorRemediate` message is correct
  */
-function checkVendorRemediate(req, res, uuid) {
+async function checkVendorRemediate(req, res, uuid) {
     return  doesTokenExist(res, req.body.transaction_id) &&
             utils.validateRes(res,
-                crypto.verify(null,
+                await falcon.verify(req.body.url_signature,
                     Buffer.from(uuid),
-                    utils.rawKeyStrToPemPubKey(getToken(req.body.transaction_id).signatures.vendor_key),
-                    new Buffer(req.body.url_signature, 'base64')
+                    await falcon.importKeyFromToken(getToken(req.body.transaction_id).signatures.vendor_key)
                 ),
                 'INVALID_SIGNATURE',
                 'url_signature is not a valid signature of the vendor')
@@ -80,14 +78,14 @@ function checkVendorRemediate(req, res, uuid) {
  * @param {Object} vendorResponse - The `VendorResponse` message
  * @returns {[string, string]?} `[error_code, error_message]` if not correct, otherwise `null`
  */
-function checkVendorResponse(transaction_id, challenge, vendorResponse) {
+async function checkVendorResponse(transaction_id, challenge, vendorResponse) {
     if (vendorResponse.HTTP_error_code) {
         return [ vendorResponse.HTTP_error_code, vendorResponse.HTTP_error_msg ]
     }
     if (!vendorResponse.success) {
         return [ vendorResponse.error_code, vendorResponse.error_message ]
     }
-    if (!utils.verifyChallResponse(challenge, vendorResponse.response, getToken(transaction_id).signatures.vendor_key)) {
+    if (!(await utils.verifyChallResponse(challenge, vendorResponse.response, await falcon.importKeyFromToken(getToken(transaction_id).signatures.vendor_key)))) {
         return [ 'AUTH_FAILED', 'The vendor\'s signature of the challenge is not appropriate' ]
     }
 

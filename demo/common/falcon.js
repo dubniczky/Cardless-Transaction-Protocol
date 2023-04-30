@@ -1,35 +1,76 @@
 import superfalcon from 'superfalcon'
-import { sha512, sha3 } from 'hash-wasm'
-import sodiumutil from 'sodiumutil'
+import fs from 'fs'
+
+async function keyGen() {
+    return await superfalcon.keyPair()
+}
 
 
-function formatHash(hash, onlyBinary) {
-    const bin = sodiumutil.from_hex(hash)
-    if (onlyBinary) {
-        return bin
+async function writeKeys(keyPair, privkeyFile, pubkeyFile) {
+    const keyData = await superfalcon.exportKeys(keyPair)
+
+    delete keyData.public.combined
+    delete keyData.private.combined
+
+    keyData.public.type = 'public'
+    keyData.private.type = 'private'
+
+    fs.writeFileSync(pubkeyFile, Buffer.from(JSON.stringify(keyData.public)))
+    fs.writeFileSync(privkeyFile, Buffer.from(JSON.stringify(keyData.private)))
+}
+
+
+async function readKey(file) {
+    const keyData = JSON.parse(fs.readFileSync(file))
+    if (keyData.type === 'public') {
+        return await superfalcon.importKeys({
+            public: {
+                classical: keyData.classical,
+                postQuantum: keyData.postQuantum
+            }
+        })
+    } else if (keyData.type === 'private') {
+        return await superfalcon.importKeys({
+            private: {
+                classical: keyData.classical,
+                postQuantum: keyData.postQuantum
+            }
+        })
     } else {
-        return {
-            binary: bin,
-            hex: hash
-        }
+        throw Error('Unknown key type')
     }
 }
 
 
-async function sha2_512(msg, onlyBinary) {
-    return formatHash(await sha512(msg), onlyBinary)
+async function sign(message, privKey) {
+    const signature = await superfalcon.signDetached(message, privKey.privateKey)
+    return Buffer.from(signature).toString('base64')
 }
 
 
-async function sha3_512(msg, onlyBinary) {
-    return formatHash(await sha3(msg, 512), onlyBinary)
+async function verify(signature, message, pubKey) {
+    return await superfalcon.verifyDetached(
+        Buffer.from(signature, 'base64'),
+        message,
+        pubKey.publicKey
+    )
 }
 
 
-console.log((await superfalcon.hash('apple')).hex)
-superfalcon.hash = sha3_512
-console.log((await superfalcon.hash('apple')).hex)
-superfalcon.hash = sha2_512
-console.log((await superfalcon.hash('apple')).hex)
-superfalcon.hash = sha3_512
-console.log((await superfalcon.hash('apple')).hex)
+async function exportKeyToToken(pubKey) {
+    const keyData = await superfalcon.exportKeys(pubKey)
+    return keyData.public.combined
+}
+
+
+async function importKeyFromToken(tokenKey) {
+    return await superfalcon.importKeys({
+        public: {
+            combined: tokenKey
+        }
+    })
+}
+
+export default {
+    keyGen, writeKeys, readKey, sign, verify, exportKeyToToken, importKeyFromToken
+}

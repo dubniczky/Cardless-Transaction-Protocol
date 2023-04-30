@@ -1,15 +1,9 @@
 lockfileVersion: 5.4
 
 specifiers:
-  hash-wasm: ^4.9.0
-  libsodium-wrappers-sumo: ^0.7.11
-  sodiumutil: ^4.0.2
   superfalcon: ^2.0.4
 
 dependencies:
-  hash-wasm: 4.9.0
-  libsodium-wrappers-sumo: 0.7.11
-  sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
   superfalcon: 2.0.4
 
 packages:
@@ -24,10 +18,6 @@ packages:
       sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
     transitivePeerDependencies:
       - libsodium-wrappers-sumo
-    dev: false
-
-  /hash-wasm/4.9.0:
-    resolution: {integrity: sha512-7SW7ejyfnRxuOc7ptQHSf4LDoZaWOivfzqw+5rpcQku0nHfmicPKE51ra9BiRLAmT8+gGLestr1XroUkqdjL6w==}
     dev: false
 
   /libsodium-sumo/0.7.11:

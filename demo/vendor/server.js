@@ -36,11 +36,11 @@ app.post('/api/stp/request/:uuid', async (req, res) => {
     utils.logMsg('ProviderHello', req.body, uuid)
     if (!validator.isOngoingRequest(res, uuid) ||
         !utils.doesBodyContainFields(req, res, ['verification_pin', 'url_signature']) ||
-        !validator.verifyUrlSignature(res, uuid, req.body.url_signature)) {
+        !(await validator.verifyUrlSignature(res, uuid, req.body.url_signature))) {
         return
     }
 
-    protocol.sendVendorTokenMsg(req, res, uuid, port)
+    await protocol.sendVendorTokenMsg(req, res, uuid, port)
 })
 
 
@@ -54,7 +54,7 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
     const uuid = req.params.uuid
     utils.logMsg('ProviderToken', req.body, uuid)
     if (!validator.isOngoingResponse(res, uuid) ||
-        !validator.checkProviderTokenMsg(req, res)) {
+        !(await validator.checkProviderTokenMsg(req, res))) {
         return
     }
 
@@ -65,16 +65,16 @@ app.post('/api/stp/response/:uuid', async (req, res) => {
 app.post('/api/stp/revision/:uuid', async (req, res) => {
     const uuid = req.params.uuid
     utils.logMsg('ProviderRevise', req.body)
-    if (!validator.checkProviderRevise(req, res, uuid)) {
+    if (!(await validator.checkProviderRevise(req, res, uuid))) {
         return
     }
 
     switch (req.body.revision_verb) {
         case 'REVOKE':
-            protocol.handleRevokeRevision(req, res)
+            await protocol.handleRevokeRevision(req, res)
             break
         case 'FINISH_MODIFICATION':
-            protocol.handleFinishModifyRevision(req, res)
+            await protocol.handleFinishModifyRevision(req, res)
             break
         default:
             protocol.handleUnknownRevision(res)

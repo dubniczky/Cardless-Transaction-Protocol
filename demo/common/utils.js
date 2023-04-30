@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import falcon from './falcon.js'
 
 /**
  * Log STP message
@@ -40,31 +41,6 @@ function getNextRecurrance(dateData, period) {
 }
 
 /**
- * Converts key from .pem Buffer to raw string
- * @param {Buffer} key - The key as the content of the .pem file as a Buffer
- * @returns {string} The key as a raw base64 string
- */
-function pemKeyToRawKeyStr(key) {
-    const fullKeyStr = key.toString()
-    const rawKeyStr = fullKeyStr.split('\n').slice(1, -2).join('')
-    return rawKeyStr
-}
-
-/**
- * Converts key back from raw string to .pem Buffer
- * @param {string} key - The key as a raw base64 string
- * @returns {Buffer} The key as the content of the .pem file as a Buffer
- */
-function rawKeyStrToPemPubKey(key) {
-    let pemKeyStr = '-----BEGIN PUBLIC KEY-----\n'
-    for (let i = 0; i < key.length; i += 64) {
-        pemKeyStr += key.substring(i, i + 64) + '\n'
-    }
-    pemKeyStr += '-----END PUBLIC KEY-----\n'
-    return Buffer.from(pemKeyStr)
-}
-
-/**
  * Generates random challenge
  * @param {number} bytes - Length of the challenge
  * @returns {string} The challenge with the given length as a base64 string
@@ -80,13 +56,8 @@ function genChallenge(bytes) {
  * @param {string} pubkey - The public key to check the response with in raw string
  * @returns {boolean} The result of the verification
  */
-function verifyChallResponse(challenge, response, pubkey) {
-    return crypto.verify(
-        null,
-        Buffer.from(challenge, 'base64'),
-        rawKeyStrToPemPubKey(pubkey),
-        Buffer.from(response, 'base64')
-    )
+async function verifyChallResponse(challenge, response, pubkey) {
+    return await falcon.verify(response, Buffer.from(challenge, 'base64'), pubkey)
 }
 
 /**
@@ -95,12 +66,8 @@ function verifyChallResponse(challenge, response, pubkey) {
  * @param {Buffer} privkey - The private key to sign the challenge in a .pem Buffer
  * @returns {string} The response to the challenge as a base64 string
  */
-function signChall(challenge, privkey) {
-    return crypto.sign(
-        null,
-        Buffer.from(challenge, 'base64'),
-        privkey
-    ).toString('base64')
+async function signChall(challenge, privkey) {
+    return await falcon.sign(Buffer.from(challenge, 'base64'), privkey)
 }
 
 /**
@@ -176,16 +143,15 @@ async function postStpRequest(stpUrl, message) {
  * @param {Object} token - The full STP token
  * @returns {boolean} The result of the verification
  */
-function verifyProviderSignatureOfToken(token) {
+async function verifyProviderSignatureOfToken(token) {
     let tokenCopy = copyObject(token)
     delete tokenCopy.signatures.provider
     delete tokenCopy.signatures.provider_key
 
-    let verifier = crypto.createVerify('SHA512')
-    verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
-    return verifier.verify(
-        rawKeyStrToPemPubKey(token.signatures.provider_key),
-        Buffer.from(token.signatures.provider, 'base64')
+    return await falcon.verify(
+        token.signatures.provider,
+        Buffer.from(JSON.stringify(tokenCopy)),
+        await falcon.importKeyFromToken(token.signatures.provider_key)
     )
 }
 
@@ -194,15 +160,14 @@ function verifyProviderSignatureOfToken(token) {
  * @param {Object} token - The vendor STP token 
  * @returns {boolean} The result of the verification
  */
-function verifyVendorSignatureOfToken(token) {
+async function verifyVendorSignatureOfToken(token) {
     let tokenCopy = copyObject(token)
     delete tokenCopy.signatures
 
-    let verifier = crypto.createVerify('SHA512')
-    verifier.update(Buffer.from(JSON.stringify(tokenCopy)))
-    return verifier.verify(
-        rawKeyStrToPemPubKey(token.signatures.vendor_key),
-        Buffer.from(token.signatures.vendor, 'base64')
+    return await falcon.verify(
+        token.signatures.vendor,
+        Buffer.from(JSON.stringify(tokenCopy)),
+        await falcon.importKeyFromToken(token.signatures.vendor_key)
     )
 }
 
@@ -292,8 +257,7 @@ function decryptToken(originalToken, tokenToDecrypt) {
 }
 
 export default {
-    logMsg, copyObject, getNextRecurrance, pemKeyToRawKeyStr, rawKeyStrToPemPubKey, genChallenge,
-    signChall, verifyChallResponse, cutIdFromUrl, sleep, formatJSON, base64ToObject, objectToBase64,
-    postStpRequest, verifyProviderSignatureOfToken, verifyVendorSignatureOfToken, validateRes,
-    doesBodyContainFields, encryptToken, decryptToken
+    logMsg, copyObject, getNextRecurrance, genChallenge, signChall, verifyChallResponse, cutIdFromUrl,
+    sleep, formatJSON, base64ToObject, objectToBase64, postStpRequest, verifyProviderSignatureOfToken,
+    verifyVendorSignatureOfToken, validateRes, doesBodyContainFields, encryptToken, decryptToken
 }

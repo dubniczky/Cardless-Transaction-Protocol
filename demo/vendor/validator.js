@@ -1,7 +1,6 @@
-import crypto from 'crypto'
-
-import { protocolState, keys, getToken } from './protocolState.js'
 import utils from '../common/utils.js'
+import falcon from '../falcon.js'
+import { protocolState, keys, getToken } from './protocolState.js'
 
 /**
  * Validates if a given ongoing request exists
@@ -40,8 +39,8 @@ function isOngoingChallenge(res, id) {
  * @param {string} signature - Base64 string of the signature
  * @returns {boolean} Whether the URL is signed corrently
  */
-function verifyUrlSignature(res, uuid, signature) {
-    return utils.validateRes(res, crypto.verify(null, Buffer.from(uuid), keys.bankPublic, new Buffer(signature, 'base64')),
+async function verifyUrlSignature(res, uuid, signature) {
+    return utils.validateRes(res, await falcon.verify(signature, Buffer.from(uuid), keys.bankPublic),
         'INVALID_SIGNATURE', 'url_signature is not a valid signature of the provider')
 }
 
@@ -73,13 +72,13 @@ function isTokenRecurring(res, id) {
  * @param {Response} res - The response object
  * @returns {boolean} Whether the `ProviderTokenMsg` message is correct
  */
-function checkProviderTokenMsg(req, res) {
+async function checkProviderTokenMsg(req, res) {
     const token = utils.base64ToObject(req.body.token)
     return  utils.validateRes(res, req.body.allowed,
                 'TRANSACTION_DECLINED', 'The transaction was declined by the user') &&
             utils.validateRes(res, req.body.token,
                 'TOKEN_NOT_FOUND', 'The transaction token is not found') &&
-            utils.validateRes(res, utils.verifyProviderSignatureOfToken(token),
+            utils.validateRes(res, await utils.verifyProviderSignatureOfToken(token),
                 'TOKEN_INVALID', 'The transaction token has an invalid provider signature')
 }
 
@@ -90,13 +89,12 @@ function checkProviderTokenMsg(req, res) {
  * @param {string} uuid - The UUID form the request URL
  * @returns {boolean} Whether the `ProviderRevise` message is correct
  */
-function checkProviderRevise(req, res, uuid) {
+async function checkProviderRevise(req, res, uuid) {
     return  doesTokenExist(res, req.body.transaction_id) &&
             utils.validateRes(res,
-                crypto.verify(null,
+                await falcon.verify(req.body.url_signature,
                     Buffer.from(uuid),
-                    utils.rawKeyStrToPemPubKey(getToken(req.body.transaction_id).signatures.provider_key),
-                    new Buffer(req.body.url_signature, 'base64')
+                    await falcon.importKeyFromToken(getToken(req.body.transaction_id).signatures.provider_key)
                 ),
                 'INVALID_SIGNATURE',
                 'url_signature is not a valid signature of the provider')
@@ -108,14 +106,14 @@ function checkProviderRevise(req, res, uuid) {
  * @param {Object} providerResponse - The `ProviderResponse` message
  * @returns {[string, string]?} `[error_code, error_message]` if not correct, otherwise `null`
  */
-function checkProviderResponse(transaction_id, challenge, providerResponse) {
+async function checkProviderResponse(transaction_id, challenge, providerResponse) {
     if (providerResponse.HTTP_error_code) {
         return [ providerResponse.HTTP_error_code, providerResponse.HTTP_error_msg ]
     }
     if (!providerResponse.success) {
         return [ providerResponse.error_code, providerResponse.error_message ]
     }
-    if (!utils.verifyChallResponse(challenge, providerResponse.response, getToken(transaction_id).signatures.provider_key)) {
+    if (!(await utils.verifyChallResponse(challenge, providerResponse.response, await falcon.importKeyFromToken(getToken(transaction_id).signatures.provider_key)))) {
         return [ 'AUTH_FAILED', 'The provider\'s signature of the challenge is not appropriate' ]
     }
 

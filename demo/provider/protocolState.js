@@ -1,4 +1,4 @@
-import fs from 'fs'
+import falcon from '../common/falcon.js'
 
 
 export const protocolState = {
@@ -11,8 +11,8 @@ export const protocolState = {
 }
 
 export const keys = {
-    private: fs.readFileSync('../keys/bank_privkey.pem'),
-    public: fs.readFileSync('../keys/bank_pubkey.pem')
+    private: await falcon.readKey('../keys/bank_privkey.json'),
+    public: await falcon.readKey('../keys/bank_pubkey.json')
 }
 
 /**
