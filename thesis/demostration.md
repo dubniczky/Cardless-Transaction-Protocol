@@ -61,17 +61,15 @@ Another library we used is Mocha, which makes it easier to execute automated tes
 
 Our end-to-end tests consist of test groups, each of which contains test cases. The structure of the test we implemented is the following:
 
-- Token negotiation
-    - Non-recurring token
-    - Recurring token
-- Token revocation
-    - Revocation by vendor
-    - Revocation by provider
-- Token refreshing
-    - Single refresh
-- Token modification
-    - Instant accept
-    - Delayed accept
+|Test group|Test case|Description|Expected result|
+|--|--|--|--|
+|Token negotiation|Non-recurring token|Negotiation a 1 USD one-time token|Both parties have the same valid token|
+||Recurring token|Negotiation a 1 USD monthly token|Both parties have the same valid token|
+|Token revocation|Revocation by vendor|Executing a REVOKE remediation after a succesful negotiation|The disappears from the valid tokens list at both parties|
+||Revocation by provider|Executing a REVOKE revision after a succesful negotiation|The disappears from the valid tokens list at both parties|
+|Token refreshing|Single refresh|Executing a REFRESH remediation after a succesful negotiation|Both parties receive a valid refreshed token with recurrance index of 1|
+|Token modification|Instant accept|Executing a MODIFY remediation after a succesful negotiation. The provider accepts the request immediatelly|The 1 USD one-token is modified to 2 USD. Both parties have the new valid token|
+||Delayed accept|Executing a MODIFY remediation after a succesful negotiation. The provider returns a PENDING request. A FINISH_MODIFICATION revision is executed after user input|The 1 USD one-token is modified to 2 USD. Both parties have the new valid token|
 
 This way all of the the token negotiation, remediation and revision procedures are covered by testcases to ensure the quality of the demonstrations we created.
 
