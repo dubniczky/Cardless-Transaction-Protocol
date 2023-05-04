@@ -123,7 +123,7 @@ async function handleRevokeRevision(req, res) {
  */
 async function handleFinishModifyRevision(req, res) {
     if (req.body.modification_status == 'ACCEPTED') {
-        protocolState.tokens[req.body.transaction_id] = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
+        protocolState.tokens[req.body.transaction_id] = utils.decryptToken(utils.hashProviderSignature(getToken(req.body.transaction_id)), req.body.token)
     }
     res.send({
         success: true,
@@ -280,11 +280,11 @@ async function generateVendorRemediate(transaction_id, remediation_verb, modifie
     const token = getToken(transaction_id)
     switch (remediation_verb) {
         case 'REFRESH':
-            vendorRemediate.token = utils.encryptToken(token, await generateRefreshedToken(token))
+            vendorRemediate.token = utils.encryptToken(utils.hashProviderSignature(token), await generateRefreshedToken(token))
             break
         case 'MODIFY':
             vendorRemediate.modified_amount = modified_amount
-            vendorRemediate.token = utils.encryptToken(token, await generateModifiedToken(token, modified_amount))
+            vendorRemediate.token = utils.encryptToken(utils.hashProviderSignature(token), await generateModifiedToken(token, modified_amount))
             break
     }
 

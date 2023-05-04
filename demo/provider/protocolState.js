@@ -6,8 +6,9 @@ export const protocolState = {
         transactions: {},
         modifications: []
     },
-    tokens: {},
-    tokenRevisionUrls: {}
+    tokens: {}, // Stored only to display in demo app, storing these is not necessary for the protocol to work
+    tokenRevisionUrls: {},
+    tokenSignatureHashes: {}
 }
 
 export const keys = {

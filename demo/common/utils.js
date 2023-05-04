@@ -209,29 +209,37 @@ function doesBodyContainFields(req, res, fields) {
 }
 
 /**
- * Generates the key and the IV used in token encryption/decryption from the original token
- * @param {Object} originalToken - The original full STP token 
+ * Returns the hash of an STP token's provider signature
+ * @param {Object} token - The STP token 
+ * @returns {string} The hash as base64 string
+ */
+function hashProviderSignature(token) {
+    return crypto.createHash('sha512')
+        .update(Buffer.from(token.signatures.provider), 'base64')
+        .digest()
+        .toString('base64')
+}
+
+/**
+ * Generates the key and the IV used in token encryption/decryption from the original token's provider signature hash
+ * @param {string} originalTokenProviderSignatureHash - The original full STP token's provider signature hash as a base64 string
  * @returns {[Buffer, Buffer]} [ key, iv ]
  */
-function getKeyAndIV(originalToken) {
-    const originalTokenCopy = copyObject(originalToken)
-    originalTokenCopy.metadata.purpose = 'ENCRYPT'
-    const hash = crypto.createHash('sha512')
-        .update(Buffer.from(JSON.stringify(originalTokenCopy)))
-        .digest()
+function getKeyAndIV(originalTokenProviderSignatureHash) {
+    const hash = Buffer.from(originalTokenProviderSignatureHash, 'base64')
     const key = hash.slice(0, 32)
     const iv = hash.slice(32, 48)
     return [ key, iv ]
 }
 
 /**
- * Encrypts the new token with the original token
- * @param {Object} originalToken - The original token
+ * Encrypts the new token with the original token's provider signature hash
+ * @param {string} originalTokenProviderSignatureHash - The original token's provider signature hash as a base64 string
  * @param {Object} tokenToEncrypt - The new token to encrypt
  * @returns {string} The ecrypted new token as base64 string
  */
-function encryptToken(originalToken, tokenToEncrypt) {
-    const [ key, iv ] = getKeyAndIV(originalToken)
+function encryptToken(originalTokenProviderSignatureHash, tokenToEncrypt) {
+    const [ key, iv ] = getKeyAndIV(originalTokenProviderSignatureHash)
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
     const cipherText = Buffer.concat([
         cipher.update(Buffer.from(JSON.stringify(tokenToEncrypt))),
@@ -241,13 +249,13 @@ function encryptToken(originalToken, tokenToEncrypt) {
 }
 
 /**
- * Decrpyts the encrypted new token with the original token
- * @param {Object} originalToken - The original token
+ * Decrpyts the encrypted new token with the original token's provider signature hash
+ * @param {string} originalTokenProviderSignatureHash - The original token's provider signature hash as a base64 string
  * @param {string} tokenToDecrypt - The new token encrypted as a base64 string
  * @returns {Object} The new token decrypted
  */
-function decryptToken(originalToken, tokenToDecrypt) {
-    const [ key, iv ] = getKeyAndIV(originalToken)
+function decryptToken(originalTokenProviderSignatureHash, tokenToDecrypt) {
+    const [ key, iv ] = getKeyAndIV(originalTokenProviderSignatureHash)
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
     const plainText = Buffer.concat([
         decipher.update(Buffer.from(tokenToDecrypt, 'base64')),
@@ -259,5 +267,6 @@ function decryptToken(originalToken, tokenToDecrypt) {
 export default {
     logMsg, copyObject, getNextRecurrance, genChallenge, signChall, verifyChallResponse, cutIdFromUrl,
     sleep, formatJSON, base64ToObject, objectToBase64, postStpRequest, verifyProviderSignatureOfToken,
-    verifyVendorSignatureOfToken, validateRes, doesBodyContainFields, encryptToken, decryptToken
+    verifyVendorSignatureOfToken, validateRes, doesBodyContainFields, hashProviderSignature, encryptToken,
+    decryptToken
 }

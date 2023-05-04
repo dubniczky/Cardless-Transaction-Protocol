@@ -95,6 +95,7 @@ async function handleUserInput(url, vendorToken, port) {
 
     protocolState.tokens[token.transaction.id] = token
     protocolState.tokenRevisionUrls[token.transaction.id] = vendorAck.revision_url
+    protocolState.tokenSignatureHashes[token.transaction.id] = utils.hashProviderSignature(token)
     return [ null, null ]
 }
 
@@ -132,6 +133,7 @@ function isRefreshedTokenValid(oldToken, newToken) {
 async function handleRevokeRemediation(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
     delete protocolState.tokenRevisionUrls[req.body.transaction_id]
+    delete protocolState.tokenSignatureHashes[req.body.transaction_id]
     res.send({
         success: true,
         response: await utils.signChall(req.body.challenge, keys.private)
@@ -144,7 +146,7 @@ async function handleRevokeRemediation(req, res) {
  * @param {Response} res - The `ProviderResponse` response
  */
 async function handleRefreshRemediation(req, res) {
-    const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
+    const token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.token)
     if (!utils.validateRes(res, isRefreshedTokenValid(getToken(req.body.transaction_id), token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
@@ -154,6 +156,7 @@ async function handleRefreshRemediation(req, res) {
 
     const fullToken = await signToken(token)
     protocolState.tokens[req.body.transaction_id] = fullToken
+    protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
     res.send({
         success: true,
         response: await utils.signChall(req.body.challenge, keys.private),
@@ -168,7 +171,7 @@ async function handleRefreshRemediation(req, res) {
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
 async function handleModificationRemediation(req, res, instantlyAcceptModify) {
-    const token = utils.decryptToken(getToken(req.body.transaction_id), req.body.token)
+    const token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.token)
     if (!utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
         'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
         return
@@ -177,6 +180,7 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
     if (instantlyAcceptModify) {
         const fullToken = await signToken(token)
         protocolState.tokens[req.body.transaction_id] = fullToken
+        protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
         res.send({
             success: true,
             response: await utils.signChall(req.body.challenge, keys.private),
@@ -236,7 +240,7 @@ async function generateProviderRevise(transaction_id, revision_verb, modificatio
             if (modificationData.accept) {
                 providerRevise.modification_status = 'ACCEPTED'
                 const modifiedFullToken = await signToken(modificationData.token)
-                providerRevise.token = utils.encryptToken(getToken(transaction_id), modifiedFullToken)
+                providerRevise.token = utils.encryptToken(protocolState.tokenSignatureHashes[transaction_id], modifiedFullToken)
             } else {
                 providerRevise.modification_status = 'REJECTED'
             }
@@ -270,10 +274,12 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
         case 'REVOKE':
             delete protocolState.tokens[transaction_id]
             delete protocolState.tokenRevisionUrls[transaction_id]
+            delete protocolState.tokenSignatureHashes[transaction_id]
             break
         case 'FINISH_MODIFICATION':
             if (modificationData.accept) {
-                protocolState.tokens[transaction_id] = utils.decryptToken(getToken(transaction_id), providerRevise.token)
+                protocolState.tokens[transaction_id] = utils.decryptToken(protocolState.tokenSignatureHashes[transaction_id], providerRevise.token)
+                protocolState.tokenSignatureHashes[transaction_id] = utils.hashProviderSignature(protocolState.tokens[transaction_id])
             }
             break
     }
