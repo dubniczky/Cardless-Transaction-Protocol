@@ -46,20 +46,20 @@ function generateNewTransactionUrl(req) {
 }
 
 /**
- * Cosntruct and send the `VendorToken` message
+ * Cosntruct and send the `VendorOffer` message
  * @param {Request} req - The incomming request
  * @param {Response} res - The response to send the message to
  * @param {string} uuid - The UUID of the incomming STP URL
  * @param {number} port - The port of the vendor server 
  */
-async function sendVendorTokenMsg(req, res, uuid, port) {
+async function sendVendorOfferMsg(req, res, uuid, port) {
     protocolState.ongoing.requestPins[uuid] = req.body.verification_pin
     const currReq = popOngoingRequest(uuid)
     const transId = crypto.randomUUID()
     protocolState.ongoing.responses[transId] = true
 
     const token = await generateVendorToken(req.body, currReq)
-    const respMessage = generateVendorTokenMsg(transId, port, token, currReq)
+    const respMessage = generateVendorOfferMsg(transId, port, token, currReq)
     res.send(respMessage)
 }
 
@@ -84,8 +84,8 @@ async function waitAndSendRequestPin(res, uuid) {
 }
 
 /**
- * Handles `ProviderToken` message and sends the `VendorAck` message
- * @param {Request} req - The `ProviderToken` request
+ * Handles `ProviderConfirm` message and sends the `VendorAck` message
+ * @param {Request} req - The `ProviderConfirm` request
  * @param {Response} res - The `VendorAck` response
  * @param {string} uuid - The UUID of the response
  * @param {number} port - The port of the vendor server 
@@ -233,7 +233,7 @@ async function generateModifiedToken(token, modified_amount) {
 }
 
 /**
- * Generates the `VendorToken` message
+ * Generates the `VendorOffer` message
  * @param {string} confirmation_id - The ID of the 2nd round trip of the transaction
  * @param {number} port - The port of the vendor server
  * @param {Object} token - The vendor STP token 
@@ -241,9 +241,9 @@ async function generateModifiedToken(token, modified_amount) {
  * @param {number} transactionData.amount - The amount of the transaction 
  * @param {string} transactionData.currency - The currency code of the transaction
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
- * @returns {Object} The `VendorToken` message
+ * @returns {Object} The `VendorOffer` message
  */
-function generateVendorTokenMsg(confirmation_id, port, token, transactionData) {
+function generateVendorOfferMsg(confirmation_id, port, token, transactionData) {
     return {
         success: true,
         confirmation_id: confirmation_id,
@@ -340,6 +340,6 @@ async function remediateToken(transaction_id, remediation_verb, modified_amount 
 }
 
 export default {
-    recurringOptionToPeriod, recurringPeriodToOption, generateNewTransactionUrl, sendVendorTokenMsg, waitAndSendRequestPin,
+    recurringOptionToPeriod, recurringPeriodToOption, generateNewTransactionUrl, sendVendorOfferMsg, waitAndSendRequestPin,
     sendVendorAck, handleRevokeRevision, handleFinishModifyRevision, handleUnknownRevision, remediateToken
 }

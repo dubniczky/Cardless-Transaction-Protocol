@@ -26,8 +26,8 @@ app.post('/start', async (req, res) => {
         return
     }
     
-    const [ vendorToken, error_code, error_msg ] = await protocol.sendProviderHello(req.body.url)
-    if (!vendorToken) {
+    const [ vendorOffer, error_code, error_msg ] = await protocol.sendProviderHello(req.body.url)
+    if (!vendorOffer) {
         return res.render('error', {
             error_code: error_code,
             error_msg: error_msg
@@ -35,12 +35,12 @@ app.post('/start', async (req, res) => {
     }
     
     return res.render('details', {
-        vendor_name: vendorToken?.vendor?.name,
-        vendor_address: vendorToken?.vendor?.address,
-        amount: vendorToken?.transaction?.amount,
-        currency: vendorToken?.transaction?.currency_code,
-        recurrance: vendorToken?.transaction?.recurrance,
-        t_id: vendorToken.token.transaction.id
+        vendor_name: vendorOffer?.vendor?.name,
+        vendor_address: vendorOffer?.vendor?.address,
+        amount: vendorOffer?.transaction?.amount,
+        currency: vendorOffer?.transaction?.currency_code,
+        recurrance: vendorOffer?.transaction?.recurrance,
+        t_id: vendorOffer.token.transaction.id
     })
 })
 

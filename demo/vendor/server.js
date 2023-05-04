@@ -40,7 +40,7 @@ app.post('/api/stp/request/:uuid', async (req, res) => {
         return
     }
 
-    await protocol.sendVendorTokenMsg(req, res, uuid, port)
+    await protocol.sendVendorOfferMsg(req, res, uuid, port)
 })
 
 
@@ -52,9 +52,9 @@ app.get('/api/stp/request/:uuid/pin', async (req, res) => {
 
 app.post('/api/stp/response/:uuid', async (req, res) => {
     const uuid = req.params.uuid
-    utils.logMsg('ProviderToken', req.body, uuid)
+    utils.logMsg('ProviderConfirm', req.body, uuid)
     if (!validator.isOngoingResponse(res, uuid) ||
-        !(await validator.checkProviderTokenMsg(req, res))) {
+        !(await validator.checkProviderConfirmMsg(req, res))) {
         return
     }
 

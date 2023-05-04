@@ -67,12 +67,12 @@ function isTokenRecurring(res, id) {
 }
 
 /**
- * Validates if the `ProviderTokenMsg` message is correct
- * @param {Request} req - The request object (`ProviderTokenMsg` message)
+ * Validates if the `ProviderConfirm` message is correct
+ * @param {Request} req - The request object (`ProviderConfirm` message)
  * @param {Response} res - The response object
- * @returns {boolean} Whether the `ProviderTokenMsg` message is correct
+ * @returns {boolean} Whether the `ProviderConfirm` message is correct
  */
-async function checkProviderTokenMsg(req, res) {
+async function checkProviderConfirmMsg(req, res) {
     const token = req.body.token
     return  utils.validateRes(res, req.body.allowed,
                 'TRANSACTION_DECLINED', 'The transaction was declined by the user') &&
@@ -122,5 +122,5 @@ async function checkProviderResponse(transaction_id, challenge, providerResponse
 
 export default {
     isOngoingRequest, isOngoingResponse, isOngoingChallenge, verifyUrlSignature, doesTokenExist, isTokenRecurring,
-    checkProviderRevise, checkProviderTokenMsg, checkProviderResponse
+    checkProviderRevise, checkProviderConfirmMsg, checkProviderResponse
 }

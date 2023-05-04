@@ -29,28 +29,28 @@ async function generateProviderHelloMsg(url) {
 }
 
 /**
- * Sends `ProviderHello` and processes the reponse (`VendorToken` message)
+ * Sends `ProviderHello` and processes the reponse (`VendorOffer` message)
  * @param {string} url - URL to send the message to
- * @returns {[Object?, string?, string?]} `[ VendorToken, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
+ * @returns {[Object?, string?, string?]} `[ VendorOffer, null, null ]` if the no errors, `[ null, err_code, err_msg ]` otherwise
  */
 async function sendProviderHello(url) {
     const providerHello = await generateProviderHelloMsg(url)
-    const vendorToken = await utils.postStpRequest(url, providerHello)
-    utils.logMsg('VendorToken', vendorToken)
-    if (vendorToken.HTTP_error_code) {
-        return [ null, vendorToken.HTTP_error_code, vendorToken.HTTP_error_msg]
+    const vendorOffer = await utils.postStpRequest(url, providerHello)
+    utils.logMsg('VendorOffer', vendorOffer)
+    if (vendorOffer.HTTP_error_code) {
+        return [ null, vendorOffer.HTTP_error_code, vendorOffer.HTTP_error_msg]
     }
 
-    if (!vendorToken.success) {
-        return [ null, vendorToken.error_code, vendorToken.error_message ]
+    if (!vendorOffer.success) {
+        return [ null, vendorOffer.error_code, vendorOffer.error_message ]
     }
 
     protocolState.ongoing.transactions[providerHello.transaction_id] = {
-        token: vendorToken.token,
-        response_url: vendorToken.response_url,
+        token: vendorOffer.token,
+        response_url: vendorOffer.response_url,
         pin: providerHello.verification_pin
     }
-    return [ vendorToken, null, null ]
+    return [ vendorOffer, null, null ]
 }
 
 
@@ -70,7 +70,7 @@ async function signToken(token) {
 }
 
 /**
- * Sends the `ProviderToken` message and processes the response (`VendorAck` message)
+ * Sends the `ProviderConfirm` message and processes the response (`VendorAck` message)
  * @param {string} url - The URL to send the message to
  * @param {Object} vendorToken - The vendor STP token
  * @param {number} port - The port of the provider server 
@@ -78,16 +78,16 @@ async function signToken(token) {
  */
 async function handleUserInput(url, vendorToken, port) {
     const token = await signToken(vendorToken)
-    const providerTokenMsg = {
+    const providerConfirm = {
         allowed: true,
         token: token,
         remediation_url: `stp://localhost:${port}/api/stp/remediation/${crypto.randomUUID()}`
     }
 
-    const vendorAck = await utils.postStpRequest(url, providerTokenMsg)
+    const vendorAck = await utils.postStpRequest(url, providerConfirm)
     utils.logMsg('VendorAck', vendorAck)
-    if (!providerTokenMsg.allowed) {
-        return [ providerTokenMsg.error_code, providerTokenMsg.error_message ]
+    if (!providerConfirm.allowed) {
+        return [ providerConfirm.error_code, providerConfirm.error_message ]
     }
     if (vendorAck.HTTP_error_code) {
         return [ vendorAck.HTTP_error_code, vendorAck.HTTP_error_msg ]
