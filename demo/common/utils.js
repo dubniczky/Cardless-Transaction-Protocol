@@ -97,24 +97,6 @@ function formatJSON(obj) {
 }
 
 /**
- * Converts base64 string to JS object
- * @param {string} base64 - The stringified JSON encoded in base64 
- * @returns {Object} The JS object
- */
-function base64ToObject(base64) {
-    return JSON.parse(Buffer.from(base64, 'base64'))
-}
-
-/**
- * Converts JS object to base64 string
- * @param {Object} obj - The stringified JSON encoded in base64 
- * @returns {string} The base64 string
- */
-function objectToBase64(obj) {
-    return Buffer.from(JSON.stringify(obj)).toString('base64')
-}
-
-/**
  * Send stp request to a given url
  * @param {string} stpUrl - The STP URL (starting with stp://)
  * @param {Object} message - The JS object to send 
@@ -145,6 +127,7 @@ async function postStpRequest(stpUrl, message) {
  */
 async function verifyProviderSignatureOfToken(token) {
     let tokenCopy = copyObject(token)
+    delete tokenCopy.signatures.signed_at
     delete tokenCopy.signatures.provider
     delete tokenCopy.signatures.provider_key
 
@@ -266,7 +249,6 @@ function decryptToken(originalTokenProviderSignatureHash, tokenToDecrypt) {
 
 export default {
     logMsg, copyObject, getNextRecurrance, genChallenge, signChall, verifyChallResponse, cutIdFromUrl,
-    sleep, formatJSON, base64ToObject, objectToBase64, postStpRequest, verifyProviderSignatureOfToken,
-    verifyVendorSignatureOfToken, validateRes, doesBodyContainFields, hashProviderSignature, encryptToken,
-    decryptToken
+    sleep, formatJSON, postStpRequest, verifyProviderSignatureOfToken, verifyVendorSignatureOfToken,
+    validateRes, doesBodyContainFields, hashProviderSignature, encryptToken, decryptToken
 }

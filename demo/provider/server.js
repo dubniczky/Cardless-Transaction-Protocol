@@ -40,7 +40,7 @@ app.post('/start', async (req, res) => {
         amount: vendorToken?.transaction?.amount,
         currency: vendorToken?.transaction?.currency_code,
         recurrance: vendorToken?.transaction?.recurrance,
-        t_id: utils.base64ToObject(vendorToken.token).transaction.id
+        t_id: vendorToken.token.transaction.id
     })
 })
 
@@ -51,7 +51,7 @@ app.post('/verify', async (req, res) => {
     }
 
     const transaction = popOngoingTransaction(req.body.t_id)
-    const vendorToken = utils.base64ToObject(transaction.token)
+    const vendorToken = transaction.token
     if (!(await validator.checkUserInput(req, res, transaction, vendorToken))) {
         return
     }

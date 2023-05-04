@@ -73,7 +73,7 @@ function isTokenRecurring(res, id) {
  * @returns {boolean} Whether the `ProviderTokenMsg` message is correct
  */
 async function checkProviderTokenMsg(req, res) {
-    const token = utils.base64ToObject(req.body.token)
+    const token = req.body.token
     return  utils.validateRes(res, req.body.allowed,
                 'TRANSACTION_DECLINED', 'The transaction was declined by the user') &&
             utils.validateRes(res, req.body.token,

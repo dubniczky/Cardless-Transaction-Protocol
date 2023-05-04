@@ -59,8 +59,8 @@ transaction:
     currency_code: USD
     # Recurrance information (one of: null, 'monthly', 'quarterly', 'annual')
     recurrance: monthly
-# Transaction JWT signed by the vendor in base64 format
-token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlb...
+# Transaction STP token signed by the vendor
+token: ...
 ```
 
 > Failure
@@ -94,8 +94,8 @@ The user selects approve or deny on the application. If they tap approve, they w
 ```yaml
 # Whether the user approved or denied the request
 allowed: true
-# JWT token signed by both the provider and the vendor
-token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmMiOi...
+# STP token signed by both the provider and the vendor (full STP token)
+token: ...
 # Pre-signed url to modify, refresh, revoke token later
 remediation_url: stp://provider.com/api/stp/remediation/26A50373-6290-4EDD-8F8D-ED22C5DE9299
 ```
@@ -226,7 +226,7 @@ transaction_id: 013CCF92-1313-434B-A838-6BE3D9645DD1
 challenge: vKvqQA8BvPmXT/QogPve6briG6dvivo3EXx3p1mj
 url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
 remediation_verb: REFRESH
-# The refreshed transaction JWT signed by the vendor and encrypted using the metadata.enc method in base64 format
+# The refreshed transaction STP signed by the vendor and encrypted using the metadata.enc method in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 Refreshing increments the `transaction.recurring.index` and updates the `transaction.recurring.next`
@@ -240,7 +240,7 @@ url_signature: ldRSWRYYWFwdkpHQ3gwVGZYZnhyWVNPWE1YRlZ0eG9S...
 remediation_verb: MODIFY
 # The new amount
 modified_amount: 12.66
-# The modified transaction JWT signed by the vendor in base64 format
+# The modified transaction STP signed by the vendor in base64 format
 token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
 ```
 The vendor can ONLY modify the `transaction.amount`. For other changes new token negotiation is necessary
@@ -260,8 +260,8 @@ response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 ```yaml
 success: true
 response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
-# The refreshed transaction JWT signed both parties and encrypted using the metadata.enc method in base64 format
-token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+# The refreshed transaction STP signed both parties
+token: ...
 ```
 
 ### Modification successful
@@ -271,8 +271,8 @@ success: true
 response: kV2tD6iuApOm8uspBat+KsXG+fP4Eb+HHkAYOeqmAUeB...
 # Modification status
 modification_status: ACCEPTED
-# The modified transaction JWT signed by both parties and encrypted using the metadata.enc method in base64 format
-token: eyJtZXRhZGF0YSI6eyJ2ZXJzaW9uIjoxLCJhbGciOiJzaGE1MTIiLCJlbmM...
+# The modified transaction STP signed by both parties
+token: ...
 ```
 
 ### Modification pending

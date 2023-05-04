@@ -12,15 +12,17 @@ import validator from './validator.js'
  */
 async function generateProviderHelloMsg(url) {
     const pin = crypto.randomInt(1000, 10000)
-    const t_id = 'STPEXPROV_' + crypto.randomInt(10 ** 9, 10 ** 10)
+    const t_id = crypto.randomUUID()
     const url_token = utils.cutIdFromUrl(url)
     const url_signature = await falcon.sign(Buffer.from(url_token), keys.private)
+    const dummy_encrypted_customer = crypto.randomBytes(30).toString('base64') // random dummy data, would encrypt some customer id in real use case
     return {
         version: 'v1',
         bank_name: 'STP_Example_Provider',
         bic: 'STPEXPROV',
         random: crypto.randomBytes(30).toString('base64'),
         transaction_id: t_id,
+        customer: dummy_encrypted_customer,
         url_signature: url_signature,
         verification_pin: pin
     }
@@ -61,6 +63,7 @@ async function signToken(token) {
     const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), keys.private)
 
     let signedToken = utils.copyObject(token)
+    signedToken.signatures.signed_at = new Date(Date.now()).toISOString()
     signedToken.signatures.provider = signature
     signedToken.signatures.provider_key = await falcon.exportKeyToToken(keys.public)
     return signedToken
@@ -77,7 +80,7 @@ async function handleUserInput(url, vendorToken, port) {
     const token = await signToken(vendorToken)
     const providerTokenMsg = {
         allowed: true,
-        token: utils.objectToBase64(token),
+        token: token,
         remediation_url: `stp://localhost:${port}/api/stp/remediation/${crypto.randomUUID()}`
     }
 
@@ -160,7 +163,7 @@ async function handleRefreshRemediation(req, res) {
     res.send({
         success: true,
         response: await utils.signChall(req.body.challenge, keys.private),
-        token: utils.objectToBase64(fullToken)
+        token: fullToken
     })
 }
 
@@ -185,7 +188,7 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
             success: true,
             response: await utils.signChall(req.body.challenge, keys.private),
             modification_status: 'ACCEPTED',
-            token: utils.objectToBase64(fullToken)
+            token: fullToken
         })
     } else {
         protocolState.ongoing.modifications.push({

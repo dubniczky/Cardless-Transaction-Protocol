@@ -92,7 +92,7 @@ async function waitAndSendRequestPin(res, uuid) {
  */
 function sendVendorAck(req, res, uuid, port) {
     delete protocolState.ongoing.responses[uuid]
-    const token = utils.base64ToObject(req.body.token)
+    const token = req.body.token
     protocolState.tokens[token.transaction.id] = token
     protocolState.tokenRemediationUrls[token.transaction.id] = req.body.remediation_url
     console.log('Transaction token:', token)
@@ -173,8 +173,9 @@ async function constructAndSignToken(transaction) {
  * @param {Object} reqBody - The content of the incomming `ProviderHello` message 
  * @param {string} reqBody.transaction_id - The ID of the transaction defined by the provider. Format: bic_id
  * @param {string} reqBody.bic - The Bank Identification Code (BIC) of the provider
+ * @param {string} reqBody.customer - The provider's customer identifier encrypted, stored as a base64 string
  * @param {Object} transactionData - The transaction data
- * @param {number} transactionData.amount - The amount of the transaction 
+ * @param {number|string} transactionData.amount - The amount of the transaction 
  * @param {string} transactionData.currency - The currency code of the transaction
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
  * @returns {Object} The vendor STP token (metadata, transaction, vendor signatures)
@@ -183,8 +184,10 @@ async function generateVendorToken(reqBody, transactionData) {
     let transaction = {
         id: reqBody.transaction_id,
         expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date(Date.now()).toISOString(),
         provider: reqBody.bic,
-        amount: transactionData.amount,
+        amount: parseFloat(transactionData.amount),
+        customer: reqBody.customer,
         currency: transactionData.currency
     }
 
@@ -220,18 +223,18 @@ async function generateRefreshedToken(token) {
 /**
  * Generates the modified token
  * @param {Object} token - The original token 
- * @param {number} modified_amount - The modified amount in the new token
+ * @param {number|string} modified_amount - The modified amount in the new token
  * @returns {Object} The modified token
  */
 async function generateModifiedToken(token, modified_amount) {
     let transaction = JSON.parse(JSON.stringify(token.transaction))
-    transaction.amount = modified_amount
+    transaction.amount = parseFloat(modified_amount)
     return await constructAndSignToken(transaction)
 }
 
 /**
  * Generates the `VendorToken` message
- * @param {string} transId - The ID of the 2nd round trip of the transaction
+ * @param {string} confirmation_id - The ID of the 2nd round trip of the transaction
  * @param {number} port - The port of the vendor server
  * @param {Object} token - The vendor STP token 
  * @param {Object} transactionData - The transaction data
@@ -240,11 +243,11 @@ async function generateModifiedToken(token, modified_amount) {
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
  * @returns {Object} The `VendorToken` message
  */
-function generateVendorTokenMsg(transId, port, token, transactionData) {
+function generateVendorTokenMsg(confirmation_id, port, token, transactionData) {
     return {
         success: true,
-        transaction_id: transId,
-        response_url: `stp://localhost:${port}/api/stp/response/${transId}`,
+        confirmation_id: confirmation_id,
+        response_url: `stp://localhost:${port}/api/stp/response/${confirmation_id}`,
         vendor: {
             name: 'STP Example Vendor',
             logo_url: 'https://i.insider.com/602ee9ced3ad27001837f2ac?width=700',
@@ -255,7 +258,7 @@ function generateVendorTokenMsg(transId, port, token, transactionData) {
             currency_code: transactionData.currency,
             recurrance: transactionData.period
         },
-        token: utils.objectToBase64(token)
+        token: token
     }
 }
 
@@ -304,11 +307,11 @@ function handleSuccessfulRemediation(transaction_id, providerResponse, remediati
             delete protocolState.tokenRemediationUrls[transaction_id]
             break
         case 'REFRESH':
-            protocolState.tokens[transaction_id] = utils.base64ToObject(providerResponse.token)
+            protocolState.tokens[transaction_id] = providerResponse.token
             break
         case 'MODIFY':
             if (providerResponse.modification_status == 'ACCEPTED') {
-                protocolState.tokens[transaction_id] = utils.base64ToObject(providerResponse.token)
+                protocolState.tokens[transaction_id] = providerResponse.token
             }
             break
     }
