@@ -1,6 +1,6 @@
 import utils from '../common/utils.js'
 import falcon from '../common/falcon.js'
-import { protocolState, getToken } from './protocolState.js'
+import { protocolState } from './protocolState.js'
 
 /**
  * Validates if a given ongoing transaction negotiation exists
@@ -65,7 +65,7 @@ async function checkVendorRemediate(req, res, uuid) {
             utils.validateRes(res,
                 await falcon.verify(req.body.url_signature,
                     Buffer.from(uuid),
-                    await falcon.importKeyFromToken(getToken(req.body.transaction_id).signatures.vendor_key)
+                    await falcon.importKeyFromToken(protocolState.tokenVendorKeys[req.body.transaction_id])
                 ),
                 'INVALID_SIGNATURE',
                 'url_signature is not a valid signature of the vendor')
@@ -85,7 +85,7 @@ async function checkVendorResponse(transaction_id, challenge, vendorResponse) {
     if (!vendorResponse.success) {
         return [ vendorResponse.error_code, vendorResponse.error_message ]
     }
-    if (!(await utils.verifyChallResponse(challenge, vendorResponse.response, await falcon.importKeyFromToken(getToken(transaction_id).signatures.vendor_key)))) {
+    if (!(await utils.verifyChallResponse(challenge, vendorResponse.response, await falcon.importKeyFromToken(protocolState.tokenVendorKeys[transaction_id])))) {
         return [ 'AUTH_FAILED', 'The vendor\'s signature of the challenge is not appropriate' ]
     }
 

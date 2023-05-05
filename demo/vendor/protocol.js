@@ -281,15 +281,16 @@ async function generateVendorRemediate(transaction_id, remediation_verb, modifie
     }
     
     const token = getToken(transaction_id)
+    const tokenSignatureHash = utils.hashProviderSignature(token)
     switch (remediation_verb) {
         case 'REFRESH':
-            vendorRemediate.original_token = utils.encryptToken(utils.hashProviderSignature(token), token)
-            vendorRemediate.refreshed_token = utils.encryptToken(utils.hashProviderSignature(token), await generateRefreshedToken(token))
+            vendorRemediate.original_token = utils.encryptToken(tokenSignatureHash, token)
+            vendorRemediate.refreshed_token = utils.encryptToken(tokenSignatureHash, await generateRefreshedToken(token))
             break
         case 'MODIFY':
             vendorRemediate.modified_amount = parseFloat(modified_amount)
-            vendorRemediate.original_token = utils.encryptToken(utils.hashProviderSignature(token), token)
-            vendorRemediate.modified_token = utils.encryptToken(utils.hashProviderSignature(token), await generateModifiedToken(token, modified_amount))
+            vendorRemediate.original_token = utils.encryptToken(tokenSignatureHash, token)
+            vendorRemediate.modified_token = utils.encryptToken(tokenSignatureHash, await generateModifiedToken(token, modified_amount))
             break
     }
 

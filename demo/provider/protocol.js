@@ -2,7 +2,7 @@ import crypto from 'crypto'
 
 import utils from '../common/utils.js'
 import falcon from '../common/falcon.js'
-import { protocolState, keys,  getToken } from './protocolState.js'
+import { protocolState, keys } from './protocolState.js'
 import validator from './validator.js'
 
 /**
@@ -99,6 +99,7 @@ async function handleUserInput(url, vendorToken, port) {
     protocolState.tokens[token.transaction.id] = token
     protocolState.tokenRevisionUrls[token.transaction.id] = vendorAck.revision_url
     protocolState.tokenSignatureHashes[token.transaction.id] = utils.hashProviderSignature(token)
+    protocolState.tokenVendorKeys[token.transaction.id] = token.signatures.vendor_key
     return [ null, null ]
 }
 
@@ -156,6 +157,7 @@ async function handleRevokeRemediation(req, res) {
     delete protocolState.tokens[req.body.transaction_id]
     delete protocolState.tokenRevisionUrls[req.body.transaction_id]
     delete protocolState.tokenSignatureHashes[req.body.transaction_id]
+    delete protocolState.tokenVendorKeys[req.body.transaction_id]
     res.send({
         success: true,
         response: await utils.signChall(req.body.challenge, keys.private)
@@ -168,8 +170,9 @@ async function handleRevokeRemediation(req, res) {
  * @param {Response} res - The `ProviderResponse` response
  */
 async function handleRefreshRemediation(req, res) {
-    const original_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.original_token)
-    const refreshed_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.refreshed_token)
+    const tokenSignatureHash = protocolState.tokenSignatureHashes[req.body.transaction_id]
+    const original_token = utils.decryptToken(tokenSignatureHash, req.body.original_token)
+    const refreshed_token = utils.decryptToken(tokenSignatureHash, req.body.refreshed_token)
     if (!utils.validateRes(res, isRefreshedTokenValid(original_token, refreshed_token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
@@ -196,8 +199,9 @@ async function handleRefreshRemediation(req, res) {
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
 async function handleModificationRemediation(req, res, instantlyAcceptModify) {
-    const original_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.original_token)
-    const modified_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.modified_token)
+    const tokenSignatureHash = protocolState.tokenSignatureHashes[req.body.transaction_id]
+    const original_token = utils.decryptToken(tokenSignatureHash, req.body.original_token)
+    const modified_token = utils.decryptToken(tokenSignatureHash, req.body.modified_token)
     if (!utils.validateRes(res, isModifiedTokenValid(original_token, modified_token, req.body.modified_amount),
             'INCORRECT_TOKEN', 'The modified token contains incorrect data') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
@@ -305,6 +309,7 @@ async function reviseToken(transaction_id, revision_verb, modificationData = nul
             delete protocolState.tokens[transaction_id]
             delete protocolState.tokenRevisionUrls[transaction_id]
             delete protocolState.tokenSignatureHashes[transaction_id]
+            delete protocolState.tokenVendorKeys[transaction_id]
             break
         case 'FINISH_MODIFICATION':
             if (modificationData.accept) {
