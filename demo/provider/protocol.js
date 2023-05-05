@@ -60,13 +60,13 @@ async function sendProviderHello(url) {
  * @returns {Object} The full STP token
  */
 async function signToken(token) {
-    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), keys.private)
+    const tokenToSign = utils.copyObject(token)
+    tokenToSign.signatures.signed_at = new Date(Date.now()).toISOString()
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(tokenToSign)), keys.private)
 
-    let signedToken = utils.copyObject(token)
-    signedToken.signatures.signed_at = new Date(Date.now()).toISOString()
-    signedToken.signatures.provider = signature
-    signedToken.signatures.provider_key = await falcon.exportKeyToToken(keys.public)
-    return signedToken
+    tokenToSign.signatures.provider = signature
+    tokenToSign.signatures.provider_key = await falcon.exportKeyToToken(keys.public)
+    return tokenToSign
 }
 
 /**
@@ -177,6 +177,8 @@ async function handleRefreshRemediation(req, res) {
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
             'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
+        !utils.validateRes(res, await utils.verifyProviderSignatureOfToken(original_token),
+            'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(refreshed_token),
             'INCORRECT_TOKEN_SIGN', 'The refreshed token is not signed properly')) {
         return
@@ -205,6 +207,8 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
     if (!utils.validateRes(res, isModifiedTokenValid(original_token, modified_token, req.body.modified_amount),
             'INCORRECT_TOKEN', 'The modified token contains incorrect data') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
+            'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
+        !utils.validateRes(res, await utils.verifyProviderSignatureOfToken(original_token),
             'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
         !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(modified_token),
             'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
