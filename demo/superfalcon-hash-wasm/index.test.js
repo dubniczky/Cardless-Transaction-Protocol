@@ -1,6 +1,5 @@
 const targets = [
-	{name: 'local build', superFalcon: require('.')},
-	{name: 'stable release', superFalcon: require('superfalcon')}
+	{name: 'local build', superFalcon: require('.')}
 ];
 
 const message = new Uint8Array([98, 97, 108, 108, 115, 0]);
