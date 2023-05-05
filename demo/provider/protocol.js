@@ -129,6 +129,25 @@ function isRefreshedTokenValid(oldToken, newToken) {
 }
 
 /**
+* Check whether the modified token is valid
+* @param {Object} oldToken - The previous token 
+* @param {Object} newToken - The modified token
+* @param {number} modifiedAmount - The modified amount
+* @returns {boolean} `true` if the modified token is valid, `false` otherwise
+*/
+function isModifiedTokenValid(oldToken, newToken, modifiedAmount) {
+   let oldTokenCopy = utils.copyObject(oldToken)
+   let newTokenCopy = utils.copyObject(newToken)
+
+   delete oldTokenCopy.signatures
+   oldTokenCopy.transaction.amount = modifiedAmount
+
+   delete newTokenCopy.signatures
+
+   return JSON.stringify(oldTokenCopy) == JSON.stringify(newTokenCopy)
+}
+
+/**
  * Handles successful revoke token remediation
  * @param {Request} req - The `VendorRemediate` request
  * @param {Response} res - The `ProviderResponse` response
@@ -149,15 +168,18 @@ async function handleRevokeRemediation(req, res) {
  * @param {Response} res - The `ProviderResponse` response
  */
 async function handleRefreshRemediation(req, res) {
-    const token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.token)
-    if (!utils.validateRes(res, isRefreshedTokenValid(getToken(req.body.transaction_id), token),
+    const original_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.original_token)
+    const refreshed_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.refreshed_token)
+    if (!utils.validateRes(res, isRefreshedTokenValid(original_token, refreshed_token),
             'INCORRECT_TOKEN', 'The refreshed token contains incorrect data') ||
-        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
+        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
+            'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
+        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(refreshed_token),
             'INCORRECT_TOKEN_SIGN', 'The refreshed token is not signed properly')) {
         return
     }
 
-    const fullToken = await signToken(token)
+    const fullToken = await signToken(refreshed_token)
     protocolState.tokens[req.body.transaction_id] = fullToken
     protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
     res.send({
@@ -174,14 +196,19 @@ async function handleRefreshRemediation(req, res) {
  * @param {boolean} instantlyAcceptModify - Whether the provider should instantly accept the modification or should promt the user
  */
 async function handleModificationRemediation(req, res, instantlyAcceptModify) {
-    const token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.token)
-    if (!utils.validateRes(res, await utils.verifyVendorSignatureOfToken(token),
-        'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
+    const original_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.original_token)
+    const modified_token = utils.decryptToken(protocolState.tokenSignatureHashes[req.body.transaction_id], req.body.modified_token)
+    if (!utils.validateRes(res, isModifiedTokenValid(original_token, modified_token, req.body.modified_amount),
+            'INCORRECT_TOKEN', 'The modified token contains incorrect data') ||
+        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(original_token),
+            'INCORRECT_TOKEN_SIGN', 'The original token is not signed properly') ||
+        !utils.validateRes(res, await utils.verifyVendorSignatureOfToken(modified_token),
+            'INCORRECT_TOKEN_SIGN', 'The modified token is not signed properly')) {
         return
     }
 
     if (instantlyAcceptModify) {
-        const fullToken = await signToken(token)
+        const fullToken = await signToken(modified_token)
         protocolState.tokens[req.body.transaction_id] = fullToken
         protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
         res.send({
@@ -196,7 +223,7 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
             modification: {
                 amount: req.body.modified_amount
             },
-            token: token,
+            token: modified_token,
         })
         res.send({
             success: true,
