@@ -127,7 +127,6 @@ async function postStpRequest(stpUrl, message) {
  */
 async function verifyProviderSignatureOfToken(token) {
     let tokenCopy = copyObject(token)
-    delete tokenCopy.signatures.signed_at
     delete tokenCopy.signatures.provider
     delete tokenCopy.signatures.provider_key
 
