@@ -7,7 +7,7 @@ var isNode	=
 
 
 var falcon		= require('falcon-crypto');
-var fastSHA512	= require('fast-sha512');
+var hashWasm	= require('hash-wasm');
 var sodium		= require('libsodium-wrappers-sumo');
 var sodiumUtil	= require('sodiumutil');
 
@@ -19,29 +19,70 @@ if (isNode) {
 }
 
 
-function hashWithAdditionalData (message, additionalData, preHashed) {
+const hashLengths = {
+    'sha512': 64,
+    'sha2-512': 64,
+    'sha3-512': 64
+}
+
+
+const hashFunctions = {
+    'sha512': hashWasm.sha512,
+    'sha2-512': hashWasm.sha512,
+    'sha3-512': async (message) => hashWasm.sha3(message, 512)
+}
+
+
+function hashWasmBaseHash(hashType, message, shouldClearMessage) {
+    return hashFunctions[hashType](message)
+        .then((hash) => {
+            if (shouldClearMessage) {
+                sodiumUtil.memzero(message)
+            }
+            return hash
+        })
+}
+
+
+function hashWasmHash(hashType, message, onlyBinary) {
+    return hashFunctions[hashType](message)
+        .then((hash) => {
+            if (onlyBinary) {
+                return hash
+            }
+
+            return {
+                binary: hash,
+                hex: Buffer.from(hash).toString('hex')
+            }
+        })
+}
+
+
+function hashWithAdditionalData (hashType, message, additionalData, preHashed) {
 	var shouldClearAdditionalData	= typeof additionalData === 'string';
 	var shouldClearMessage			= typeof message === 'string';
 
 	return Promise.resolve().then(function () {
 		message	= sodiumUtil.from_string(message);
 
-		if (preHashed && message.length !== fastSHA512.bytes) {
+		if (preHashed && message.length !== hashLengths[hashType]) {
 			throw new Error('Invalid pre-hashed message.');
 		}
 
 		return Promise.all([
-			fastSHA512.baseHash(
+			hashWasmBaseHash(
+                hashType, 
 				additionalData ? sodiumUtil.from_string(additionalData) : new Uint8Array(0),
 				shouldClearAdditionalData
 			),
-			preHashed ? message : fastSHA512.baseHash(message, shouldClearMessage)
+			preHashed ? message : hashWasmBaseHash(hashType, message, shouldClearMessage)
 		]);
 	}).then(function (results) {
 		var additionalDataHash	= results[0];
 		var messageToHash		= results[1];
 
-		var fullMessage	= new Uint8Array(additionalDataHash.length + fastSHA512.bytes);
+		var fullMessage	= new Uint8Array(additionalDataHash.length + hashLengths[hashType]);
 		fullMessage.set(additionalDataHash);
 		fullMessage.set(messageToHash, additionalDataHash.length);
 		sodiumUtil.memzero(additionalDataHash);
@@ -50,7 +91,7 @@ function hashWithAdditionalData (message, additionalData, preHashed) {
 			sodiumUtil.memzero(messageToHash);
 		}
 
-		return fastSHA512.baseHash(fullMessage, true);
+		return hashWasmBaseHash(hashType, fullMessage, true);
 	});
 }
 
@@ -301,10 +342,12 @@ var superFalcon	= {
 	publicKeyBytes: initiated.then(function () { return publicKeyBytes; }),
 	privateKeyBytes: initiated.then(function () { return privateKeyBytes; }),
 	bytes: initiated.then(function () { return bytes; }),
-	hashBytes: Promise.resolve(fastSHA512.bytes),
+	hashBytes: function (hashType) {
+        return hashLengths[hashType]
+    },
 
-	hash: function (message, onlyBinary) {
-		return fastSHA512.hash(message, onlyBinary);
+	hash: function (hashType, message, onlyBinary) {
+		return hashWasmHash(hashType, message, onlyBinary);
 	},
 
 	keyPair: function () { return initiated.then(function () {
@@ -335,10 +378,11 @@ var superFalcon	= {
 		});
 	}); },
 
-	sign: function (message, privateKey, additionalData) { return initiated.then(function () {
+	sign: function (hashType, message, privateKey, additionalData) { return initiated.then(function () {
 		var shouldClearMessage	= typeof message === 'string';
 
 		return superFalcon.signDetached(
+            hashType,
 			message,
 			privateKey,
 			additionalData
@@ -368,8 +412,8 @@ var superFalcon	= {
 		});
 	}); },
 
-	signBase64: function (message, privateKey, additionalData) { return initiated.then(function () {
-		return superFalcon.sign(message, privateKey, additionalData).then(function (signed) {
+	signBase64: function (hashType, message, privateKey, additionalData) { return initiated.then(function () {
+		return superFalcon.sign(hashType, message, privateKey, additionalData).then(function (signed) {
 			var s	= sodiumUtil.to_base64(signed);
 			sodiumUtil.memzero(signed);
 			return s;
@@ -377,12 +421,13 @@ var superFalcon	= {
 	}); },
 
 	signDetached: function (
+        hashType,
 		message,
 		privateKey,
 		additionalData,
 		preHashed
 	) { return initiated.then(function () {
-		return hashWithAdditionalData(message, additionalData, preHashed).then(function (hash) {
+		return hashWithAdditionalData(hashType, message, additionalData, preHashed).then(function (hash) {
 			return Promise.all([
 				hash,
 				sodium.crypto_sign_detached(
@@ -403,7 +448,7 @@ var superFalcon	= {
 				)
 			]);
 		}).then(function (results) {
-			var hash			= results[0];
+			var hash			= results[0];openString
 			var eccSignature	= results[1];
 			var falconSignature	= results[2];
 
@@ -421,12 +466,14 @@ var superFalcon	= {
 	}); },
 
 	signDetachedBase64: function (
+        hashType,
 		message,
 		privateKey,
 		additionalData,
 		preHashed
 	) { return initiated.then(function () {
 			return superFalcon.signDetached(
+                hashType,
 				message,
 				privateKey,
 				additionalData,
@@ -440,6 +487,7 @@ var superFalcon	= {
 	},
 
 	open: function (
+        hashType,
 		signed,
 		publicKey,
 		additionalData,
@@ -464,6 +512,7 @@ var superFalcon	= {
 			);
 
 			return Promise.all([message, superFalcon.verifyDetached(
+                hashType,
 				signature,
 				message,
 				publicKey,
@@ -496,6 +545,7 @@ var superFalcon	= {
 	}); },
 
 	openString: function (
+        hashType,
 		signed,
 		publicKey,
 		additionalData,
@@ -503,6 +553,7 @@ var superFalcon	= {
 		includeHash
 	) { return initiated.then(function () {
 		return superFalcon.open(
+            hashType,
 			signed,
 			publicKey,
 			additionalData,
@@ -525,6 +576,7 @@ var superFalcon	= {
 	}); },
 
 	verifyDetached: function (
+        hashType,
 		signature,
 		message,
 		publicKey,
@@ -534,7 +586,7 @@ var superFalcon	= {
 	) { return initiated.then(function () {
 		var shouldClearSignature	= typeof signature === 'string';
 
-		return hashWithAdditionalData(message, additionalData).then(function (hash) {
+		return hashWithAdditionalData(hashType, message, additionalData).then(function (hash) {
 			signature	= sodiumUtil.from_base64(signature);
 
 			var shouldClearKnownGoodHash	= false;

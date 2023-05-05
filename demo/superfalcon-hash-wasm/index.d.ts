@@ -4,7 +4,7 @@ declare module 'superfalcon' {
 		bytes: Promise<number>;
 
 		/** Hash length. */
-		hashBytes: Promise<number>;
+		hashBytes (hashType: string) : number;
 
 		/** Private key length. */
 		privateKeyBytes: Promise<number>;
@@ -50,10 +50,10 @@ declare module 'superfalcon' {
 		}>;
 
 		/** SHA-512 hash. */
-		hash (message: Uint8Array|string, onlyBinary: true) : Promise<Uint8Array>;
+		hash (hashType: string, message: Uint8Array|string, onlyBinary: true) : Promise<Uint8Array>;
 
 		/** SHA-512 hash. */
-		hash (message: Uint8Array|string, onlyBinary?: false) : Promise<{
+		hash (hashType: string, message: Uint8Array|string, onlyBinary?: false) : Promise<{
 			binary: Uint8Array;
 			hex: string;
 		}>;
@@ -86,6 +86,7 @@ declare module 'superfalcon' {
 
 		/** Verifies signed message against publicKey and returns it. */
 		open (
+            hashType: string,
 			signed: Uint8Array|string,
 			publicKey: Uint8Array|{
 				public: {classical: string; postQuantum: string}|{combined: string}
@@ -96,6 +97,7 @@ declare module 'superfalcon' {
 
 		/** Verifies signed message against publicKey and returns it. */
 		open (
+            hashType: string,
 			signed: Uint8Array|string,
 			publicKey: Uint8Array|{
 				public: {classical: string; postQuantum: string}|{combined: string}
@@ -110,6 +112,7 @@ declare module 'superfalcon' {
 
 		/** Verifies signed message against publicKey and returns it decoded to a string. */
 		openString (
+            hashType: string,
 			signed: Uint8Array|string,
 			publicKey: Uint8Array|{
 				public: {classical: string; postQuantum: string}|{combined: string}
@@ -120,6 +123,7 @@ declare module 'superfalcon' {
 
 		/** Verifies signed message against publicKey and returns it decoded to a string. */
 		openString (
+            hashType: string,
 			signed: Uint8Array|string,
 			publicKey: Uint8Array|{
 				public: {classical: string; postQuantum: string}|{combined: string}
@@ -134,6 +138,7 @@ declare module 'superfalcon' {
 
 		/** Signs message with privateKey and returns combined message. */
 		sign (
+            hashType: string,
 			message: Uint8Array|string,
 			privateKey: Uint8Array,
 			additionalData?: Uint8Array|string
@@ -141,6 +146,7 @@ declare module 'superfalcon' {
 
 		/** Signs message with privateKey and returns combined message encoded as base64. */
 		signBase64 (
+            hashType: string,
 			message: Uint8Array|string,
 			privateKey: Uint8Array,
 			additionalData?: Uint8Array|string
@@ -148,6 +154,7 @@ declare module 'superfalcon' {
 
 		/** Signs message with privateKey and returns signature. */
 		signDetached (
+            hashType: string,
 			message: Uint8Array|string,
 			privateKey: Uint8Array,
 			additionalData?: Uint8Array|string,
@@ -156,6 +163,7 @@ declare module 'superfalcon' {
 
 		/** Signs message with privateKey and returns signature encoded as base64. */
 		signDetachedBase64 (
+            hashType: string,
 			message: Uint8Array|string,
 			privateKey: Uint8Array,
 			additionalData?: Uint8Array|string,
@@ -164,6 +172,7 @@ declare module 'superfalcon' {
 
 		/** Verifies detached signature against publicKey. */
 		verifyDetached (
+            hashType: string,
 			signature: Uint8Array|string,
 			message: Uint8Array|string,
 			publicKey: Uint8Array|{
@@ -175,6 +184,7 @@ declare module 'superfalcon' {
 
 		/** Verifies detached signature against publicKey. */
 		verifyDetached (
+            hashType: string,
 			signature: Uint8Array|string,
 			message: Uint8Array|string,
 			publicKey: Uint8Array|{

@@ -2,14 +2,14 @@ lockfileVersion: 5.4
 
 specifiers:
   falcon-crypto: ^1.0.4
-  fast-sha512: ^1.0.4
+  hash-wasm: ^4.9.0
   jest: ^29.5.0
   libsodium-wrappers-sumo: ^0.7.11
   sodiumutil: ^4.0.2
 
 dependencies:
   falcon-crypto: 1.0.4
-  fast-sha512: 1.0.4_cxzimadrp54sbwcpkqemddv5pm
+  hash-wasm: 4.9.0
   jest: 29.5.0
   libsodium-wrappers-sumo: 0.7.11
   sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
@@ -1085,14 +1085,6 @@ packages:
     resolution: {integrity: sha512-lhd/wF+Lk98HZoTCtlVraHtfh5XYijIjalXck7saUtuanSDyLMxnHhSXEDJqHxD7msR8D0uCmqlkwjCV8xvwHw==}
     dev: false
 
-  /fast-sha512/1.0.4_cxzimadrp54sbwcpkqemddv5pm:
-    resolution: {integrity: sha512-WFKli7kH9C7b64GJPWADVfZX5aEvHZviFhY210DpchO915ynJTkK3Sd8Pkj56+Gpam5XgGTI8nFCeHUiQ1JQIQ==}
-    dependencies:
-      sodiumutil: 4.0.2_cxzimadrp54sbwcpkqemddv5pm
-    transitivePeerDependencies:
-      - libsodium-wrappers-sumo
-    dev: false
-
   /fb-watchman/2.0.2:
     resolution: {integrity: sha512-p5161BqbuCaSnB8jIbzQHOlpgsPmK5rJVDfDKO91Axs5NC1uu3HRQm6wt9cd9/+GtQQIO53JdGXXoyDpTAsgYA==}
     dependencies:
@@ -1185,6 +1177,10 @@ packages:
     engines: {node: '>= 0.4.0'}
     dependencies:
       function-bind: 1.1.1
+    dev: false
+
+  /hash-wasm/4.9.0:
+    resolution: {integrity: sha512-7SW7ejyfnRxuOc7ptQHSf4LDoZaWOivfzqw+5rpcQku0nHfmicPKE51ra9BiRLAmT8+gGLestr1XroUkqdjL6w==}
     dev: false
 
   /html-escaper/2.0.2:

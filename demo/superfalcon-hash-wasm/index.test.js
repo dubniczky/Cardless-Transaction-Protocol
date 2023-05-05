@@ -1,42 +1,37 @@
-const targets = [
-	{name: 'local build', superFalcon: require('.')}
-];
+const hashTypes = [
+    'sha512', 'sha2-512', 'sha3-512'
+]
+
+const superFalcon = require('.')
 
 const message = new Uint8Array([98, 97, 108, 108, 115, 0]);
 
 const toHex = bytes => Buffer.from(bytes).toString('hex');
 
-for (const {name, superFalcon} of targets) {
-	test(`${name} key pair generation`, async () => superFalcon.keyPair());
-}
+test(`key pair generation`, async () => superFalcon.keyPair());
 
-for (const [keyPairTarget, signTarget, verifyTarget] of targets.flatMap(a =>
-	targets.flatMap(b =>
-		a === b ?
-			[[a, a, a]] :
-			[
-				[a, a, b],
-				[a, b, b]
-			]
-	)
-)) {
-	test(`end-to-end test (${keyPairTarget.name} key pair, ${signTarget.name} signing, ${verifyTarget.name} verification)`, async () => {
-		const keyPair = await keyPairTarget.superFalcon.keyPair();
+for (const hashType of hashTypes) {
+	test(`end-to-end test of ${hashType})`, async () => {
+		const keyPair = await superFalcon.keyPair();
 
-		const signed = await signTarget.superFalcon.sign(
+		const signed = await superFalcon.sign(
+            hashType,
 			message,
 			keyPair.privateKey
 		);
-		const verified = await verifyTarget.superFalcon.open(
+		const verified = await superFalcon.open(
+            hashType,
 			signed,
 			keyPair.publicKey
 		);
 
-		const signature = await signTarget.superFalcon.signDetached(
+		const signature = await superFalcon.signDetached(
+            hashType,
 			message,
 			keyPair.privateKey
 		);
-		const isValid = await verifyTarget.superFalcon.verifyDetached(
+		const isValid = await superFalcon.verifyDetached(
+            hashType,
 			signature,
 			message,
 			keyPair.publicKey
