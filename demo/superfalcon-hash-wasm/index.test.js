@@ -1,5 +1,5 @@
 const hashTypes = [
-    'sha512', 'sha2-512', 'sha3-512'
+    'sha512', 'sha-512', 'sha2-512', 'sha3512', 'sha3-512'
 ]
 
 const superFalcon = require('.')

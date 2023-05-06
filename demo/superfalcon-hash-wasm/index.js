@@ -21,7 +21,9 @@ if (isNode) {
 
 const hashCreators = {
     'sha512': hashWasm.createSHA512,
+    'sha-512': hashWasm.createSHA512,
     'sha2-512': hashWasm.createSHA512,
+    'sha3512': () => hashWasm.createSHA3(512),
     'sha3-512': () => hashWasm.createSHA3(512)
 }
 
