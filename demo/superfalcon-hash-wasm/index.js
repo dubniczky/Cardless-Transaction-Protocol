@@ -19,22 +19,27 @@ if (isNode) {
 }
 
 
-const hashLengths = {
-    'sha512': 64,
-    'sha2-512': 64,
-    'sha3-512': 64
+const hashCreators = {
+    'sha512': hashWasm.createSHA512,
+    'sha2-512': hashWasm.createSHA512,
+    'sha3-512': () => hashWasm.createSHA3(512)
 }
 
 
-const hashFunctions = {
-    'sha512': hashWasm.sha512,
-    'sha2-512': hashWasm.sha512,
-    'sha3-512': async (message) => hashWasm.sha3(message, 512)
+function getHashDigestSize(hashType) {
+    return hashCreators[hashType]()
+        .then((hasher) => hasher.digestSize)
 }
 
 
-function hashWasmBaseHash(hashType, message, shouldClearMessage) {
-    return hashFunctions[hashType](message)
+function hashCore(hashType, message) {
+    return hashCreators[hashType]()
+        .then(hasher => hasher.init().update(message).digest('binary'))
+}
+
+
+function hashWasmBaseHashWrapper(hashType, message, shouldClearMessage) {
+    return hashCore(hashType, message)
         .then((hash) => {
             if (shouldClearMessage) {
                 sodiumUtil.memzero(message)
@@ -44,8 +49,8 @@ function hashWasmBaseHash(hashType, message, shouldClearMessage) {
 }
 
 
-function hashWasmHash(hashType, message, onlyBinary) {
-    return hashFunctions[hashType](message)
+function hashWasmHashWrapper(hashType, message, onlyBinary) {
+    return hashCore(hashType, message)
         .then((hash) => {
             if (onlyBinary) {
                 return hash
@@ -64,25 +69,29 @@ function hashWithAdditionalData (hashType, message, additionalData, preHashed) {
 	var shouldClearMessage			= typeof message === 'string';
 
 	return Promise.resolve().then(function () {
+        return getHashDigestSize(hashType)
+    }).then(function (hashSize) {
 		message	= sodiumUtil.from_string(message);
 
-		if (preHashed && message.length !== hashLengths[hashType]) {
+		if (preHashed && message.length !== hashSize) {
 			throw new Error('Invalid pre-hashed message.');
 		}
 
 		return Promise.all([
-			hashWasmBaseHash(
+			hashWasmBaseHashWrapper(
                 hashType, 
 				additionalData ? sodiumUtil.from_string(additionalData) : new Uint8Array(0),
 				shouldClearAdditionalData
 			),
-			preHashed ? message : hashWasmBaseHash(hashType, message, shouldClearMessage)
+			preHashed ? message : hashWasmBaseHashWrapper(hashType, message, shouldClearMessage),
+            hashSize
 		]);
 	}).then(function (results) {
 		var additionalDataHash	= results[0];
 		var messageToHash		= results[1];
+		var hashSize		    = results[2];
 
-		var fullMessage	= new Uint8Array(additionalDataHash.length + hashLengths[hashType]);
+		var fullMessage	= new Uint8Array(additionalDataHash.length + hashSize);
 		fullMessage.set(additionalDataHash);
 		fullMessage.set(messageToHash, additionalDataHash.length);
 		sodiumUtil.memzero(additionalDataHash);
@@ -91,7 +100,7 @@ function hashWithAdditionalData (hashType, message, additionalData, preHashed) {
 			sodiumUtil.memzero(messageToHash);
 		}
 
-		return hashWasmBaseHash(hashType, fullMessage, true);
+		return hashWasmBaseHashWrapper(hashType, fullMessage, true);
 	});
 }
 
@@ -342,13 +351,9 @@ var superFalcon	= {
 	publicKeyBytes: initiated.then(function () { return publicKeyBytes; }),
 	privateKeyBytes: initiated.then(function () { return privateKeyBytes; }),
 	bytes: initiated.then(function () { return bytes; }),
-	hashBytes: function (hashType) {
-        return hashLengths[hashType]
-    },
+	hashBytes: getHashDigestSize,
 
-	hash: function (hashType, message, onlyBinary) {
-		return hashWasmHash(hashType, message, onlyBinary);
-	},
+	hash: hashWasmHashWrapper,
 
 	keyPair: function () { return initiated.then(function () {
 		return Promise.all([
@@ -448,7 +453,7 @@ var superFalcon	= {
 				)
 			]);
 		}).then(function (results) {
-			var hash			= results[0];openString
+			var hash			= results[0];
 			var eccSignature	= results[1];
 			var falconSignature	= results[2];
 

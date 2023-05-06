@@ -4,7 +4,7 @@ declare module 'superfalcon' {
 		bytes: Promise<number>;
 
 		/** Hash length. */
-		hashBytes (hashType: string) : number;
+		hashBytes (hashType: string) : Promise<number>;
 
 		/** Private key length. */
 		privateKeyBytes: Promise<number>;
