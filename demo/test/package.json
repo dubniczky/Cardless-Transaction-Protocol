@@ -5,7 +5,7 @@
   "main": "test.js",
   "type": "module",
   "scripts": {
-    "test": "mocha --no-timeouts 'test.js'"
+    "test": "mocha --no-timeouts test.js"
   },
   "keywords": [],
   "author": "",
