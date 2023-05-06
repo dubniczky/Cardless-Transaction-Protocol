@@ -20,7 +20,7 @@ app.use('/', express.static('public'))
 
 
 app.post('/gen_url', async (req, res) => {
-    if (!utils.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring'])) {
+    if (!utils.doesBodyContainFields(req, res, ['amount', 'currency', 'recurring', 'suit'])) {
         return
     }
     

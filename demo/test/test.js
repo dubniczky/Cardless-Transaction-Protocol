@@ -15,6 +15,7 @@ describe('Token negotiation', function () {
         const tokenAtProvider = await browser.getDisplayedToken(providerTab)
 
         assert.deepEqual(tokenAtProvider, tokenAtVendor)
+        assert.equal(tokenAtProvider.metadata.alg, 'sha512,sha3512')
         assert.equal(tokenAtProvider.transaction.amount, 1)
         assert.equal(tokenAtProvider.transaction.currency, 'USD')
         assert.equal(tokenAtProvider.transaction.recurring, null)
@@ -32,10 +33,31 @@ describe('Token negotiation', function () {
         const tokenAtProvider = await browser.getDisplayedToken(providerTab)
 
         assert.deepEqual(tokenAtProvider, tokenAtVendor)
+        assert.equal(tokenAtProvider.metadata.alg, 'sha512,sha3512')
         assert.equal(tokenAtProvider.transaction.amount, 1)
         assert.equal(tokenAtProvider.transaction.currency, 'USD')
         assert.notEqual(tokenAtProvider.transaction.recurring, null)
         assert.equal(tokenAtProvider.transaction.recurring.period, 'monthly')
+        assert.equal(tokenAtProvider.transaction.recurring.index, 0)
+        assert.ok(await utils.verifyVendorSignatureOfToken(tokenAtProvider))
+        assert.ok(await utils.verifyProviderSignatureOfToken(tokenAtProvider))
+    })
+
+    test('Recurring SHA3-first token', async function (vendorTab, providerTab) {
+        const transactionId = await browser.negotiateToken(vendorTab, providerTab, 1, 'USD', 'annual', 'sha3512,sha512')
+
+        await browser.startTokenAction(vendorTab, transactionId, 'Show')
+        const tokenAtVendor = await browser.getDisplayedToken(vendorTab)
+
+        await browser.startTokenAction(providerTab, transactionId, 'Show')
+        const tokenAtProvider = await browser.getDisplayedToken(providerTab)
+
+        assert.deepEqual(tokenAtProvider, tokenAtVendor)
+        assert.equal(tokenAtProvider.metadata.alg, 'sha3512,sha512')
+        assert.equal(tokenAtProvider.transaction.amount, 1)
+        assert.equal(tokenAtProvider.transaction.currency, 'USD')
+        assert.notEqual(tokenAtProvider.transaction.recurring, null)
+        assert.equal(tokenAtProvider.transaction.recurring.period, 'annual')
         assert.equal(tokenAtProvider.transaction.recurring.index, 0)
         assert.ok(await utils.verifyVendorSignatureOfToken(tokenAtProvider))
         assert.ok(await utils.verifyProviderSignatureOfToken(tokenAtProvider))

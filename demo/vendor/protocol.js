@@ -39,7 +39,8 @@ function generateNewTransactionUrl(req) {
     protocolState.ongoing.requests[uuid] = {
         amount: req.body.amount,
         currency: req.body.currency,
-        period: recurringOptionToPeriod(req.body.recurring)
+        period: recurringOptionToPeriod(req.body.recurring),
+        suit: req.body.suit
     }
     console.log(`Transaction data:\n${uuid}: ${JSON.stringify(protocolState.ongoing.requests[uuid])}\n`)
     return uuid
@@ -146,20 +147,22 @@ function handleUnknownRevision(res) {
 /**
  * Constructs and signs the vendor STP token from the transaction data
  * @param {Object} transaction - The transaction data in an object
+ * @param {string} hashSuit - Hash suit to use. `sha512,sha3512` or `sha3512,sha512`
  * @returns {Object} The vendor STP token (metadata, transaction, vendor signatures)
  */
-async function constructAndSignToken(transaction) {
+async function constructAndSignToken(transaction, hashSuit) {
     let token = {
         metadata: {
             version: 1,
-            alg: 'sha512,sha3512',
+            alg: hashSuit,
             enc: 'sha512,aes256',
             sig: 'falcon1024,ed25519'
         },
         transaction: transaction
     }
 
-    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), 'sha512', keys.private)
+    const hashType = hashSuit.split(',')[0]
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), hashType, keys.private)
     token.signatures = {
         vendor: signature,
         vendor_key: await falcon.exportKeyToToken(keys.public)
@@ -178,6 +181,7 @@ async function constructAndSignToken(transaction) {
  * @param {number|string} transactionData.amount - The amount of the transaction 
  * @param {string} transactionData.currency - The currency code of the transaction
  * @param {string?} transactionData.period - The recurrance period of the transaction. One of: null, monthly, quarterly, annual
+ * @param {string} transactionData.suit - Hash suit to use. `sha512,sha3512` or `sha3512,sha512`
  * @returns {Object} The vendor STP token (metadata, transaction, vendor signatures)
  */
 async function generateVendorToken(reqBody, transactionData) {
@@ -201,7 +205,7 @@ async function generateVendorToken(reqBody, transactionData) {
         transaction.recurring = null
     }
 
-    return await constructAndSignToken(transaction)
+    return await constructAndSignToken(transaction, transactionData.suit)
 }
 
 /**
@@ -217,7 +221,7 @@ async function generateRefreshedToken(token) {
         utils.getNextRecurrance(transaction.recurring.next, transaction.recurring.period)
     transaction.recurring.index += 1
     
-    return await constructAndSignToken(transaction) 
+    return await constructAndSignToken(transaction, token.metadata.alg) 
 }
 
 /**
@@ -229,7 +233,8 @@ async function generateRefreshedToken(token) {
 async function generateModifiedToken(token, modified_amount) {
     let transaction = JSON.parse(JSON.stringify(token.transaction))
     transaction.amount = parseFloat(modified_amount)
-    return await constructAndSignToken(transaction)
+    
+    return await constructAndSignToken(transaction, token.metadata.alg)
 }
 
 /**

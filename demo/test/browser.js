@@ -35,10 +35,11 @@ async function selectOption(select, optionValue) {
 }
 
 
-async function startVendorTransaction(vendorTab, amount, currency, recurring = 'one_time') {
+async function startVendorTransaction(vendorTab, amount, currency, recurring = 'one_time', hashSuit = 'sha512,sha3512') {
     await driver.switchTo().window(vendorTab)
     await driver.findElement(By.id('amount')).sendKeys(amount)
     await selectOption(await driver.findElement(By.id('recurring')), recurring)
+    await selectOption(await driver.findElement(By.id('suit')), hashSuit)
     await driver.findElement(By.id('currency')).sendKeys(currency, Key.RETURN)
 
     return await driver.findElement(By.xpath('//p/b[contains(text(), "stp://")]')).getText()
@@ -123,8 +124,8 @@ async function acceptConfirmAlert(providerTab) {
 }
 
 
-async function negotiateToken(vendorTab, providerTab, amount, currency, recurring = 'one_time') {
-    const stpUrl = await startVendorTransaction(vendorTab, amount, currency, recurring)
+async function negotiateToken(vendorTab, providerTab, amount, currency, recurring = 'one_time', hashSuit = 'sha512,sha3512') {
+    const stpUrl = await startVendorTransaction(vendorTab, amount, currency, recurring, hashSuit)
     await startProviderTransaction(providerTab, stpUrl)
 
     const pin = await getPinFromVendor(vendorTab)
