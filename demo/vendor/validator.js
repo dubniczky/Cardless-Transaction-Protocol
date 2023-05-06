@@ -40,7 +40,7 @@ function isOngoingChallenge(res, id) {
  * @returns {boolean} Whether the URL is signed corrently
  */
 async function verifyUrlSignature(res, uuid, signature) {
-    return utils.validateRes(res, await falcon.verify(signature, Buffer.from(uuid), keys.bankPublic),
+    return utils.validateRes(res, await falcon.verify(signature, Buffer.from(uuid), 'sha512', keys.bankPublic),
         'INVALID_SIGNATURE', 'url_signature is not a valid signature of the provider')
 }
 
@@ -94,6 +94,7 @@ async function checkProviderRevise(req, res, uuid) {
             utils.validateRes(res,
                 await falcon.verify(req.body.url_signature,
                     Buffer.from(uuid),
+                    'sha512',
                     await falcon.importKeyFromToken(getToken(req.body.transaction_id).signatures.provider_key)
                 ),
                 'INVALID_SIGNATURE',
@@ -113,7 +114,11 @@ async function checkProviderResponse(transaction_id, challenge, providerResponse
     if (!providerResponse.success) {
         return [ providerResponse.error_code, providerResponse.error_message ]
     }
-    if (!(await utils.verifyChallResponse(challenge, providerResponse.response, await falcon.importKeyFromToken(getToken(transaction_id).signatures.provider_key)))) {
+    if (!(await utils.verifyChallResponse(challenge,
+            providerResponse.response,
+            'sha512',
+            await falcon.importKeyFromToken(getToken(transaction_id).signatures.provider_key))
+        )) {
         return [ 'AUTH_FAILED', 'The provider\'s signature of the challenge is not appropriate' ]
     }
 

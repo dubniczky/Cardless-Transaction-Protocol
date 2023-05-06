@@ -65,6 +65,7 @@ async function checkVendorRemediate(req, res, uuid) {
             utils.validateRes(res,
                 await falcon.verify(req.body.url_signature,
                     Buffer.from(uuid),
+                    'sha512',
                     await falcon.importKeyFromToken(protocolState.tokenVendorKeys[req.body.transaction_id])
                 ),
                 'INVALID_SIGNATURE',
@@ -85,7 +86,11 @@ async function checkVendorResponse(transaction_id, challenge, vendorResponse) {
     if (!vendorResponse.success) {
         return [ vendorResponse.error_code, vendorResponse.error_message ]
     }
-    if (!(await utils.verifyChallResponse(challenge, vendorResponse.response, await falcon.importKeyFromToken(protocolState.tokenVendorKeys[transaction_id])))) {
+    if (!(await utils.verifyChallResponse(challenge,
+            vendorResponse.response,
+            'sha512',
+            await falcon.importKeyFromToken(protocolState.tokenVendorKeys[transaction_id]))
+        )) {
         return [ 'AUTH_FAILED', 'The vendor\'s signature of the challenge is not appropriate' ]
     }
 

@@ -53,21 +53,23 @@ function genChallenge(bytes) {
  * Verifies a response to a given challenge
  * @param {string} challenge - The challenge as a base64 string 
  * @param {string} response - The response as a base64 string
+ * @param {string} hashType - Type of hash to be used for signing. One of: sha512, sha3512
  * @param {string} pubkey - The public key to check the response with in raw string
  * @returns {boolean} The result of the verification
  */
-async function verifyChallResponse(challenge, response, pubkey) {
-    return await falcon.verify(response, Buffer.from(challenge, 'base64'), pubkey)
+async function verifyChallResponse(challenge, response, hashType, pubkey) {
+    return await falcon.verify(response, Buffer.from(challenge, 'base64'), hashType, pubkey)
 }
 
 /**
  * Signes a given challenge
  * @param {string} challenge - The challenge as a base64 string
+ * @param {string} hashType - Type of hash to be used for signing. One of: sha512, sha3512
  * @param {Buffer} privkey - The private key to sign the challenge in a .pem Buffer
  * @returns {string} The response to the challenge as a base64 string
  */
-async function signChall(challenge, privkey) {
-    return await falcon.sign(Buffer.from(challenge, 'base64'), privkey)
+async function signChall(challenge, hashType, privkey) {
+    return await falcon.sign(Buffer.from(challenge, 'base64'), hashType, privkey)
 }
 
 /**
@@ -126,13 +128,15 @@ async function postStpRequest(stpUrl, message) {
  * @returns {boolean} The result of the verification
  */
 async function verifyProviderSignatureOfToken(token) {
-    let tokenCopy = copyObject(token)
+    const tokenCopy = copyObject(token)
     delete tokenCopy.signatures.provider
     delete tokenCopy.signatures.provider_key
 
+    const hashType = tokenCopy.metadata.alg.split(',')[1]
     return await falcon.verify(
         token.signatures.provider,
         Buffer.from(JSON.stringify(tokenCopy)),
+        hashType,
         await falcon.importKeyFromToken(token.signatures.provider_key)
     )
 }
@@ -146,9 +150,11 @@ async function verifyVendorSignatureOfToken(token) {
     let tokenCopy = copyObject(token)
     delete tokenCopy.signatures
 
+    const hashType = tokenCopy.metadata.alg.split(',')[0]
     return await falcon.verify(
         token.signatures.vendor,
         Buffer.from(JSON.stringify(tokenCopy)),
+        hashType,
         await falcon.importKeyFromToken(token.signatures.vendor_key)
     )
 }

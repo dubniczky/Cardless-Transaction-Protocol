@@ -1,4 +1,4 @@
-import superfalcon from 'superfalcon'
+import superfalcon from '../superfalcon-hash-wasm/index.js'
 import fs from 'fs'
 
 /**
@@ -58,11 +58,12 @@ async function readKey(file) {
  * Signs a message with falcon
  * WANRING: Pseudo-random function. Two calls with the same parameters result in different signatures (both are valid)
  * @param {Buffer} message - The message as a binary buffer
- * @param {Object} privKey - The falcon private key 
+ * @param {string} hashType - Type of hash to be used for signing. One of: sha512, sha3512
+ * @param {Object} privKey - The falcon private key
  * @returns {string} The signature as a base64 string.
  */
-async function sign(message, privKey) {
-    const signature = await superfalcon.signDetached(message, privKey.privateKey)
+async function sign(message, hashType, privKey) {
+    const signature = await superfalcon.signDetached(hashType, message, privKey.privateKey)
     return Buffer.from(signature).toString('base64')
 }
 
@@ -70,11 +71,13 @@ async function sign(message, privKey) {
  * Verifies a given signature with falcon
  * @param {string} signature - The signature as a base64 string
  * @param {Buffer} message - The message as a binary buffer
+ * @param {string} hashType - Type of hash to be used for signing. One of: sha512, sha3512
  * @param {Object} pubKey - The falcon public key 
  * @returns {boolean} Whether the signature is valid
  */
-async function verify(signature, message, pubKey) {
+async function verify(signature, message, hashType, pubKey) {
     return await superfalcon.verifyDetached(
+        hashType,
         Buffer.from(signature, 'base64'),
         message,
         pubKey.publicKey

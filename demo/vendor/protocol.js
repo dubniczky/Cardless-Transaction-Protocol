@@ -112,7 +112,7 @@ async function handleRevokeRevision(req, res) {
     delete protocolState.tokenRemediationUrls[req.body.transaction_id]
     res.send({
         success: true,
-        response: await utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, 'sha512', keys.private)
     })
 }
 
@@ -127,7 +127,7 @@ async function handleFinishModifyRevision(req, res) {
     }
     res.send({
         success: true,
-        response: await utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, 'sha512', keys.private)
     })
 }
 
@@ -152,14 +152,14 @@ async function constructAndSignToken(transaction) {
     let token = {
         metadata: {
             version: 1,
-            alg: 'sha512',
+            alg: 'sha512,sha3512',
             enc: 'sha512,aes256',
             sig: 'falcon1024,ed25519'
         },
         transaction: transaction
     }
 
-    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), keys.private)
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(token)), 'sha512', keys.private)
     token.signatures = {
         vendor: signature,
         vendor_key: await falcon.exportKeyToToken(keys.public)
@@ -276,7 +276,7 @@ async function generateVendorRemediate(transaction_id, remediation_verb, modifie
     const vendorRemediate = {
         transaction_id: transaction_id,
         challenge: challenge,
-        url_signature: await falcon.sign(Buffer.from(urlToken), keys.private),
+        url_signature: await falcon.sign(Buffer.from(urlToken), 'sha512', keys.private),
         remediation_verb: remediation_verb
     }
     

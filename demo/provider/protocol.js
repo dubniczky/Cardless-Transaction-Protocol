@@ -14,7 +14,7 @@ async function generateProviderHelloMsg(url) {
     const pin = crypto.randomInt(1000, 10000)
     const t_id = crypto.randomUUID()
     const url_token = utils.cutIdFromUrl(url)
-    const url_signature = await falcon.sign(Buffer.from(url_token), keys.private)
+    const url_signature = await falcon.sign(Buffer.from(url_token), 'sha512', keys.private)
     const dummy_encrypted_customer = crypto.randomBytes(30).toString('base64') // random dummy data, would encrypt some customer id in real use case
     return {
         version: 'v1',
@@ -62,7 +62,8 @@ async function sendProviderHello(url) {
 async function signToken(token) {
     const tokenToSign = utils.copyObject(token)
     tokenToSign.signatures.signed_at = new Date(Date.now()).toISOString()
-    const signature = await falcon.sign(Buffer.from(JSON.stringify(tokenToSign)), keys.private)
+    const hashType = tokenToSign.metadata.alg.split(',')[1]
+    const signature = await falcon.sign(Buffer.from(JSON.stringify(tokenToSign)), hashType, keys.private)
 
     tokenToSign.signatures.provider = signature
     tokenToSign.signatures.provider_key = await falcon.exportKeyToToken(keys.public)
@@ -160,7 +161,7 @@ async function handleRevokeRemediation(req, res) {
     delete protocolState.tokenVendorKeys[req.body.transaction_id]
     res.send({
         success: true,
-        response: await utils.signChall(req.body.challenge, keys.private)
+        response: await utils.signChall(req.body.challenge, 'sha512', keys.private)
     })
 }
 
@@ -189,7 +190,7 @@ async function handleRefreshRemediation(req, res) {
     protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
     res.send({
         success: true,
-        response: await utils.signChall(req.body.challenge, keys.private),
+        response: await utils.signChall(req.body.challenge, 'sha512', keys.private),
         token: fullToken
     })
 }
@@ -215,16 +216,18 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
         return
     }
 
+    const providerResponse = {
+        success: true,
+        response: await utils.signChall(req.body.challenge, 'sha512', keys.private)
+    }
+    
     if (instantlyAcceptModify) {
         const fullToken = await signToken(modified_token)
         protocolState.tokens[req.body.transaction_id] = fullToken
         protocolState.tokenSignatureHashes[req.body.transaction_id] = utils.hashProviderSignature(fullToken)
-        res.send({
-            success: true,
-            response: await utils.signChall(req.body.challenge, keys.private),
-            modification_status: 'ACCEPTED',
-            token: fullToken
-        })
+
+        providerResponse.modification_status = 'ACCEPTED'
+        providerResponse.token = fullToken
     } else {
         protocolState.ongoing.modifications.push({
             id: req.body.transaction_id,
@@ -233,12 +236,11 @@ async function handleModificationRemediation(req, res, instantlyAcceptModify) {
             },
             token: modified_token,
         })
-        res.send({
-            success: true,
-            response: await utils.signChall(req.body.challenge, keys.private),
-            modification_status: 'PENDING'
-        })
+        
+        providerResponse.modification_status = 'PENDING'
     }
+
+    res.send(providerResponse)
 }
 
 /**
@@ -269,7 +271,7 @@ async function generateProviderRevise(transaction_id, revision_verb, modificatio
     const providerRevise = {
         transaction_id: transaction_id,
         challenge: challenge,
-        url_signature: await falcon.sign(Buffer.from(urlToken), keys.private),
+        url_signature: await falcon.sign(Buffer.from(urlToken), 'sha-512', keys.private),
         revision_verb: revision_verb
     }
     
