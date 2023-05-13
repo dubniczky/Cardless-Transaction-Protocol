@@ -1,6 +1,7 @@
 import express from 'express'
 
 import utils from '../common/utils.js'
+import middlewares from '../common/middlewares.js'
 import validator from './validator.js'
 import protocol from './protocol.js'
 import { getAllTokensList, getToken }  from './protocolState.js'
@@ -17,6 +18,8 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
 app.use('/', express.static('public'))
+
+app.use(middlewares.benchmark())
 
 
 app.post('/gen_url', async (req, res) => {
