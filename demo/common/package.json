@@ -5,12 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "assert": "^2.0.0",
+    "mocha": "^10.2.0",
     "superfalcon": "^2.0.4"
   }
 }
